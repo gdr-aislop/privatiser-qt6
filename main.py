@@ -900,6 +900,16 @@ class MainWindow(QMainWindow):
             extra_patterns=extra or None,
         )
 
+    def _merge_mapping(self, new_mapping: dict) -> None:
+        """Append new_mapping entries into self._mapping, skipping already-known originals."""
+        if self._mapping is None:
+            self._mapping = new_mapping
+            return
+        existing_originals = set(self._mapping.values())
+        for tag, orig in new_mapping.items():
+            if orig not in existing_originals:
+                self._mapping[tag] = orig
+
     def _apply_custom_replacements(self, result: str, mapping: dict) -> tuple[str, dict]:
         for original, custom_repl in list(self._custom_replacements.items()):
             auto_tag = next((tag for tag, orig in mapping.items() if orig == original), None)
@@ -922,10 +932,10 @@ class MainWindow(QMainWindow):
             return
 
         result, mapping = self._apply_custom_replacements(result, mapping)
-        self._mapping = mapping
+        self._merge_mapping(mapping)
         self._output_edit.setPlainText(result)
-        self._populate_mapping(mapping)
-        n = len(mapping)
+        self._populate_mapping(self._mapping)
+        n = len(self._mapping)
         self._status(f"Anonymized — {n} replacement{'s' if n != 1 else ''}.")
 
     def _run_deanonymize(self) -> None:
@@ -960,11 +970,11 @@ class MainWindow(QMainWindow):
             self._status(f"Anonymization failed: {exc}", error=True)
             return
         result, mapping = self._apply_custom_replacements(result, mapping)
-        self._mapping = mapping
+        self._merge_mapping(mapping)
         self._output_edit.setPlainText(result)
-        self._populate_mapping(mapping)
+        self._populate_mapping(self._mapping)
         QApplication.clipboard().setText(result)
-        n = len(mapping)
+        n = len(self._mapping)
         self._status(f"Anonymized and copied to clipboard — {n} replacement{'s' if n != 1 else ''}.")
 
     def _paste_and_deanon(self) -> None:
