@@ -472,9 +472,6 @@ class MainWindow(QMainWindow):
         self._settings = QSettings("Privatiser", "PrivatiserGUI")
 
         self.setWindowTitle("Privatiser")
-        _icon = Path(__file__).parent / "docs" / "icon.png"
-        if _icon.exists():
-            self.setWindowIcon(QIcon(str(_icon)))
         self.setMinimumSize(860, 580)
         self.resize(
             self._settings.value("window/width",  1100, int),
@@ -1326,6 +1323,10 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Privatiser")
     app.setOrganizationName("Privatiser")
+
+    _icon = Path(__file__).parent / "docs" / "icon.png"
+    if _icon.exists():
+        app.setWindowIcon(QIcon(str(_icon)))
 
     window = MainWindow()
     window.show()
