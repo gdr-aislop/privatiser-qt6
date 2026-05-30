@@ -813,24 +813,6 @@ class MainWindow(QMainWindow):
         bl.addWidget(self._allowlist_edit)
         bl.addWidget(self._hint("Comma-separated. These values will never be redacted."))
 
-        # Pro licence
-        bl.addWidget(self._field_label("Pro Licence Key"))
-        lic_row = QHBoxLayout()
-        self._licence_edit = self._settings_lineedit(
-            placeholder="PRV1-…",
-            accessible_name="Pro licence key",
-            accessible_desc="Enter your Privatiser Pro licence key and click Activate",
-        )
-        self._licence_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        activate_btn = QPushButton("Activate")
-        activate_btn.setMinimumHeight(34)
-        activate_btn.setMinimumWidth(90)
-        activate_btn.setAccessibleName("Activate Pro licence")
-        activate_btn.clicked.connect(self._activate_licence)
-        lic_row.addWidget(self._licence_edit)
-        lic_row.addWidget(activate_btn)
-        bl.addLayout(lic_row)
-
         return sec
 
     # ── Mapping table section ──────────────────────────────────────────────────
@@ -1236,24 +1218,16 @@ class MainWindow(QMainWindow):
         # Red for errors is universal; clear to native for normal messages
         self._status_msg.setStyleSheet("color: red;" if error else "")
 
-    def _activate_licence(self) -> None:
-        key = self._licence_edit.text().strip()
-        if not key:
-            self._status("Enter a licence key before clicking Activate.", error=True)
-            return
-        QMessageBox.information(
-            self, "Pro Licence",
-            "Licence activation requires a network connection to Privatiser's licence server.\n\n"
-            "This feature will be available in a future release.",
-        )
-
     def _show_about(self) -> None:
         QMessageBox.about(
             self, "About Privatiser",
             "<b>Privatiser</b> — desktop GUI<br><br>"
             "Anonymizes IPs, API keys, secrets, PII, and cloud identifiers from any text. "
             "Fully reversible. Everything runs locally — nothing leaves this machine.<br><br>"
-            "Powered by <a href='https://privatiser.net'>privatiser-engine</a>.",
+            "Built on the freemium "
+            "<a href='https://privatiser.net/'>Privatiser</a> library. "
+            "If you find it useful, consider purchasing a licence to support its development.<br><br>"
+            "<i>This application is not affiliated with or endorsed by Privatiser.</i>",
         )
 
     # ── Widget helpers ─────────────────────────────────────────────────────────
