@@ -548,9 +548,12 @@ class MainWindow(QMainWindow):
         vm.addAction(self._dark_action)
 
         vm.addSeparator()
-        self._add_action(vm, "Increase Font Size", "Ctrl+=", self._increase_font)
-        self._add_action(vm, "Decrease Font Size", "Ctrl+-", self._decrease_font)
-        self._add_action(vm, "Reset Font Size",    "Ctrl+0", self._reset_font)
+        self._add_action(vm, "Increase Font Size", "Ctrl+=", self._increase_font,
+                         icon=QIcon.fromTheme("zoom-in"))
+        self._add_action(vm, "Decrease Font Size", "Ctrl+-", self._decrease_font,
+                         icon=QIcon.fromTheme("zoom-out"))
+        self._add_action(vm, "Reset Font Size",    "Ctrl+0", self._reset_font,
+                         icon=QIcon.fromTheme("zoom-original"))
 
         # Help
         hm = mb.addMenu("&Help")
