@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QSettings, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QFont, QIcon, QKeySequence
+from PyQt6.QtGui import QAction, QBrush, QColor, QFont, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -472,6 +472,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self._mapping: Optional[dict] = None
+        self._custom_replacements: dict = {}  # {original: user-chosen replacement}
         self._settings = QSettings("Privatiser", "PrivatiserGUI")
 
         self.setWindowTitle("Privatiser")
@@ -899,6 +900,16 @@ class MainWindow(QMainWindow):
             extra_patterns=extra or None,
         )
 
+    def _apply_custom_replacements(self, result: str, mapping: dict) -> tuple[str, dict]:
+        for original, custom_repl in list(self._custom_replacements.items()):
+            auto_tag = next((tag for tag, orig in mapping.items() if orig == original), None)
+            if auto_tag is None:
+                continue
+            result = result.replace(auto_tag, custom_repl)
+            del mapping[auto_tag]
+            mapping[custom_repl] = original
+        return result, mapping
+
     def _run_anonymize(self) -> None:
         text = self._input_edit.toPlainText()
         if not text.strip():
@@ -910,6 +921,7 @@ class MainWindow(QMainWindow):
             self._status(f"Anonymization failed: {exc}", error=True)
             return
 
+        result, mapping = self._apply_custom_replacements(result, mapping)
         self._mapping = mapping
         self._output_edit.setPlainText(result)
         self._populate_mapping(mapping)
@@ -947,6 +959,7 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self._status(f"Anonymization failed: {exc}", error=True)
             return
+        result, mapping = self._apply_custom_replacements(result, mapping)
         self._mapping = mapping
         self._output_edit.setPlainText(result)
         self._populate_mapping(mapping)
@@ -1003,6 +1016,7 @@ class MainWindow(QMainWindow):
         self._input_edit.clear()
         self._output_edit.clear()
         self._mapping = None
+        self._custom_replacements.clear()
         self._mapping_table.blockSignals(True)
         self._mapping_table.setRowCount(0)
         self._mapping_table.blockSignals(False)
@@ -1169,6 +1183,8 @@ class MainWindow(QMainWindow):
 
             replacement_item = QTableWidgetItem(str(replacement))
             replacement_item.setData(Qt.ItemDataRole.UserRole, str(replacement))
+            if original in self._custom_replacements:
+                self._mark_custom_item(replacement_item)
             self._mapping_table.setItem(row, 1, replacement_item)
         self._mapping_table.blockSignals(False)
 
@@ -1193,6 +1209,8 @@ class MainWindow(QMainWindow):
             return
         self._mapping[new_replacement] = original
         item.setData(Qt.ItemDataRole.UserRole, new_replacement)
+        self._custom_replacements[original] = new_replacement
+        self._mark_custom_item(item)
 
         output = self._output_edit.toPlainText()
         if old_replacement in output:
@@ -1216,6 +1234,8 @@ class MainWindow(QMainWindow):
             f'Restore original value in output and add to Whitelist'
         )
 
+        is_custom = original in self._custom_replacements
+
         if menu.exec(self._mapping_table.viewport().mapToGlobal(pos)) != action:
             return
 
@@ -1223,12 +1243,14 @@ class MainWindow(QMainWindow):
         output = self._output_edit.toPlainText()
         self._output_edit.setPlainText(output.replace(replacement, original))
 
-        # Remove from mapping dict
+        # Remove from mapping dict and custom overrides
         if self._mapping is not None:
             self._mapping.pop(replacement, None)
+        self._custom_replacements.pop(original, None)
 
-        # Add original to Whitelist so future runs leave it untouched
-        self._add_to_whitelist(original)
+        # Only whitelist auto-generated entries; custom ones the user wanted redacted
+        if not is_custom:
+            self._add_to_whitelist(original)
 
         # Remove row (block signals to avoid spurious cellChanged)
         self._mapping_table.blockSignals(True)
@@ -1416,6 +1438,13 @@ class MainWindow(QMainWindow):
         if accessible_desc:
             edit.setAccessibleDescription(accessible_desc)
         return edit
+
+    @staticmethod
+    def _mark_custom_item(item: QTableWidgetItem) -> None:
+        font = item.font()
+        font.setBold(True)
+        item.setFont(font)
+        item.setForeground(QBrush(QColor("#2563eb")))
 
     @staticmethod
     def _parse_csv(text: str) -> list[str]:
