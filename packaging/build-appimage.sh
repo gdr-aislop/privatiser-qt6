@@ -7,19 +7,19 @@ export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-    python3-pip python3-dev \
+    python3 python3-venv python3-dev \
     binutils patchelf \
     wget \
     imagemagick \
     libxcb-cursor0 libxcb1 libx11-6 libgl1 libglib2.0-0
 
-# Ubuntu 24.04 enforces PEP 668 (externally-managed-environment).
-# Inside the Docker container we don't care about the system state, so
-# --break-system-packages is safe here.
-python3 -m pip install --quiet --break-system-packages --upgrade pip
-python3 -m pip install --quiet --break-system-packages PyQt6 privatiser pyinstaller
+# Use a venv to avoid PEP 668 "externally-managed-environment" errors
+# on Ubuntu 24.04 and to keep pip independent of the system package manager.
+python3 -m venv /opt/build-venv
+/opt/build-venv/bin/pip install --quiet --upgrade pip
+/opt/build-venv/bin/pip install --quiet PyQt6 privatiser pyinstaller
 
-pyinstaller \
+/opt/build-venv/bin/pyinstaller \
     --name privatiser \
     --onedir \
     --windowed \
