@@ -7,7 +7,7 @@ import sys
 from typing import Optional
 
 from PyQt6.QtCore import QSettings, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QFont, QKeySequence
+from PyQt6.QtGui import QAction, QFont, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -514,9 +514,11 @@ class MainWindow(QMainWindow):
         # Edit
         em = mb.addMenu("&Edit")
         self._add_action(em, "Copy &Output",         "Ctrl+Shift+C", self._copy_output,
-                         "Copy the output pane to the clipboard")
+                         "Copy the output pane to the clipboard",
+                         QIcon.fromTheme("edit-copy"))
         self._add_action(em, "&Paste into Input",    "Ctrl+Shift+V", self._paste_input,
-                         "Paste clipboard text into the input pane")
+                         "Paste clipboard text into the input pane",
+                         QIcon.fromTheme("edit-paste"))
         em.addSeparator()
         self._add_action(em, "Load &Sample Text",    "Ctrl+Shift+E", self._load_sample,
                          "Fill the input pane with sample sensitive text")
