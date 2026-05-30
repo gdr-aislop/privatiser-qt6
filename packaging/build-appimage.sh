@@ -13,8 +13,9 @@ apt-get install -y --no-install-recommends \
     imagemagick \
     libxcb-cursor0 libxcb1 libx11-6 libgl1 libglib2.0-0
 
-# Use pip-installed PyQt6 so PyInstaller collects the full manylinux Qt bundle,
-# not whatever partial package the distro ships.
+# Upgrade pip first — Ubuntu 20.04 ships pip 20 which is too old to resolve
+# PyQt6 manylinux wheel tags and falls back to a source build (requires qmake).
+pip3 install --quiet --upgrade pip
 pip3 install --quiet PyQt6 privatiser pyinstaller
 
 pyinstaller \
