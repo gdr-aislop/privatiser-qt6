@@ -405,6 +405,7 @@ class DropTextEdit(QTextEdit):
         if selection:
             menu.addSeparator()
             action = menu.addAction(f'Add "{selection[:40]}" to Custom Words')
+            action.setIcon(QIcon.fromTheme("list-add"))
             action.setStatusTip(
                 "Add the selected text to the Custom Words to Redact list in Settings"
             )
@@ -455,6 +456,7 @@ class OutputTextEdit(QTextEdit):
         if selection:
             menu.addSeparator()
             action = menu.addAction(f'Add "{selection[:40]}" to Whitelist')
+            action.setIcon(QIcon.fromTheme("list-add"))
             action.setStatusTip(
                 "Add the selected text to the Whitelist (Never Redact) in Settings"
             )
