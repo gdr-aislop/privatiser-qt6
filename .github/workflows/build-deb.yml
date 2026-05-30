@@ -67,10 +67,14 @@ jobs:
           install -d "${PKG}/usr/bin"
           install -d "${PKG}/usr/share/applications"
           install -d "${PKG}/usr/share/doc/privatiser"
+          install -d "${PKG}/usr/share/icons/hicolor/256x256/apps"
 
           # Application source and vendored library
           install -m 644 main.py             "${PKG}/usr/share/privatiser/"
           cp -r vendor/.                     "${PKG}/usr/share/privatiser/vendor/"
+
+          install -m 644 docs/icon.png \
+            "${PKG}/usr/share/icons/hicolor/256x256/apps/privatiser.png"
 
           # Launcher and .desktop come from packaging/ in the repo,
           # avoiding heredocs with column-0 body lines that break YAML.
