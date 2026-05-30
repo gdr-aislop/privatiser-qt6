@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QStatusBar,
+    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -334,6 +335,8 @@ DARK_STYLESHEET = """
 class CollapsibleSection(QWidget):
     """Header toggle button + hidden/shown content area."""
 
+    toggled = pyqtSignal(bool)  # emitted when expanded/collapsed via the header button
+
     def __init__(self, title: str, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._title = title
@@ -363,6 +366,7 @@ class CollapsibleSection(QWidget):
         self._update_toggle_text()
         state = "expanded" if checked else "collapsed"
         self._toggle.setAccessibleDescription(f"{self._title} section, {state}")
+        self.toggled.emit(checked)
 
     def _update_toggle_text(self) -> None:
         arrow = "▼" if self._expanded else "▶"
@@ -485,20 +489,27 @@ class MainWindow(QMainWindow):
     def _build_menu(self) -> None:
         mb = self.menuBar()
         mb.setAccessibleName("Main menu bar")
+        style = self.style()
+        SI = QStyle.StandardPixmap
 
         # File
         fm = mb.addMenu("&File")
         self._add_action(fm, "&Open Input File…",    "Ctrl+O",       self._open_file,
-                         "Open a text file into the input pane")
+                         "Open a text file into the input pane",
+                         style.standardIcon(SI.SP_DialogOpenButton))
         self._add_action(fm, "&Save Output As…",     "Ctrl+Shift+S", self._save_output,
-                         "Save the output pane to a file")
+                         "Save the output pane to a file",
+                         style.standardIcon(SI.SP_DialogSaveButton))
         fm.addSeparator()
         self._add_action(fm, "Save &Mapping As…",    "Ctrl+Shift+M", self._save_mapping,
-                         "Save the anonymization mapping to JSON")
+                         "Save the anonymization mapping to JSON",
+                         style.standardIcon(SI.SP_DialogSaveButton))
         self._add_action(fm, "&Load Mapping…",       "Ctrl+Shift+L", self._load_mapping,
-                         "Load a previously saved mapping for deanonymization")
+                         "Load a previously saved mapping for deanonymization",
+                         style.standardIcon(SI.SP_DialogOpenButton))
         fm.addSeparator()
-        self._add_action(fm, "&Quit",                "Ctrl+Q",       self.close)
+        self._add_action(fm, "&Quit",                "Ctrl+Q",       self.close,
+                         icon=style.standardIcon(SI.SP_TitleBarCloseButton))
 
         # Edit
         em = mb.addMenu("&Edit")
@@ -510,20 +521,21 @@ class MainWindow(QMainWindow):
         self._add_action(em, "Load &Sample Text",    "Ctrl+Shift+E", self._load_sample,
                          "Fill the input pane with sample sensitive text")
         self._add_action(em, "C&lear All",           "",             self._clear_all,
-                         "Clear both panes and the mapping table")
+                         "Clear both panes and the mapping table",
+                         style.standardIcon(SI.SP_TrashIcon))
         self._add_action(em, "Focus &Input",         "Ctrl+L",       self._focus_input,
                          "Select all text in the input pane and focus it")
 
-        # View
+        # View — use set_expanded so the header toggle button stays visible when
+        # the section is collapsed; sync the action back when the user clicks the
+        # header toggle directly.
         vm = mb.addMenu("&View")
         self._settings_toggle = QAction("&Settings Panel", self, checkable=True, checked=True)
         self._settings_toggle.setShortcut(QKeySequence("Ctrl+,"))
-        self._settings_toggle.toggled.connect(lambda v: self._settings_sec.setVisible(v))
         vm.addAction(self._settings_toggle)
 
         self._mapping_toggle = QAction("&Mapping Table", self, checkable=True, checked=True)
         self._mapping_toggle.setShortcut(QKeySequence("Ctrl+T"))
-        self._mapping_toggle.toggled.connect(lambda v: self._mapping_sec.setVisible(v))
         vm.addAction(self._mapping_toggle)
 
         vm.addSeparator()
@@ -539,12 +551,15 @@ class MainWindow(QMainWindow):
 
         # Help
         hm = mb.addMenu("&Help")
-        self._add_action(hm, "&About Privatiser", triggered=self._show_about)
+        self._add_action(hm, "&About Privatiser", triggered=self._show_about,
+                         icon=style.standardIcon(SI.SP_MessageBoxInformation))
 
     @staticmethod
     def _add_action(menu, label: str, shortcut: str = "", triggered=None,
-                    status_tip: str = "") -> QAction:
+                    status_tip: str = "", icon=None) -> QAction:
         action = QAction(label, menu.parent() if hasattr(menu, 'parent') else None)
+        if icon is not None:
+            action.setIcon(icon)
         if shortcut:
             action.setShortcut(QKeySequence(shortcut))
         if status_tip:
@@ -581,6 +596,23 @@ class MainWindow(QMainWindow):
         # Mapping table
         self._mapping_sec = self._build_mapping_section()
         layout.addWidget(self._mapping_sec)
+
+        # View menu ↔ collapsible sections: use set_expanded so the header
+        # toggle button stays visible when the section is collapsed.
+        self._settings_toggle.toggled.connect(self._settings_sec.set_expanded)
+        self._mapping_toggle.toggled.connect(self._mapping_sec.set_expanded)
+
+        def _sync_action(action: QAction, checked: bool) -> None:
+            action.blockSignals(True)
+            action.setChecked(checked)
+            action.blockSignals(False)
+
+        self._settings_sec.toggled.connect(
+            lambda v: _sync_action(self._settings_toggle, v)
+        )
+        self._mapping_sec.toggled.connect(
+            lambda v: _sync_action(self._mapping_toggle, v)
+        )
 
     def _build_input_pane(self) -> QFrame:
         frame, layout = self._pane_frame()
