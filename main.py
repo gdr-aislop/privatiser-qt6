@@ -1187,6 +1187,13 @@ class MainWindow(QMainWindow):
         self._custom_words_edit.setText(self._settings.value("custom_words", "", str))
         self._allowlist_edit.setText(self._settings.value("allowlist", "", str))
 
+        self._settings_sec.set_expanded(
+            self._settings.value("view/settings_expanded", True, bool)
+        )
+        self._mapping_sec.set_expanded(
+            self._settings.value("view/mapping_expanded", True, bool)
+        )
+
         # Restore theme — blockSignals so we only call _apply_theme once at the end
         self._dark_action.blockSignals(True)
         self._dark_action.setChecked(self._settings.value("theme/dark", False, bool))
@@ -1200,7 +1207,9 @@ class MainWindow(QMainWindow):
             self._settings.setValue(f"cat/{key}", cb.isChecked())
         self._settings.setValue("theme/dark",    self._dark_action.isChecked())
         self._settings.setValue("custom_words",  self._custom_words_edit.text())
-        self._settings.setValue("allowlist",    self._allowlist_edit.text())
+        self._settings.setValue("allowlist",     self._allowlist_edit.text())
+        self._settings.setValue("view/settings_expanded", self._settings_sec._expanded)
+        self._settings.setValue("view/mapping_expanded",  self._mapping_sec._expanded)
 
     def closeEvent(self, event) -> None:
         self._save_settings()
