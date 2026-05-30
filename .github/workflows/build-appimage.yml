@@ -32,13 +32,13 @@ jobs:
             echo "version=0.0.0~git${SHORT}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build AppImage (ubuntu:24.04 container)
+      - name: Build AppImage (python:3.12-slim container)
         run: |
           docker run --rm \
             -e VERSION="${{ steps.version.outputs.version }}" \
             -v "${PWD}:/workspace" \
             -w /workspace \
-            ubuntu:24.04 \
+            python:3.12-slim \
             bash packaging/build-appimage.sh
 
       # ── Verify ────────────────────────────────────────────────────────────

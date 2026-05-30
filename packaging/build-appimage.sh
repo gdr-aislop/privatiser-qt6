@@ -1,5 +1,6 @@
 #!/bin/bash
-# Runs inside ubuntu:24.04 (glibc 2.39, Python 3.12) to produce an AppImage.
+# Runs inside python:3.12-slim (Debian Bookworm, glibc 2.36) to produce an AppImage.
+# pip works out of the box in official Python images — no PEP 668 constraints.
 # Called by .github/workflows/build-appimage.yml via docker run.
 set -euo pipefail
 
@@ -7,19 +8,15 @@ export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-dev \
     binutils patchelf \
     wget \
     imagemagick \
     libxcb-cursor0 libxcb1 libx11-6 libgl1 libglib2.0-0
 
-# Use a venv to avoid PEP 668 "externally-managed-environment" errors
-# on Ubuntu 24.04 and to keep pip independent of the system package manager.
-python3 -m venv /opt/build-venv
-/opt/build-venv/bin/pip install --quiet --upgrade pip
-/opt/build-venv/bin/pip install --quiet PyQt6 privatiser pyinstaller
+pip install --quiet --upgrade pip
+pip install --quiet PyQt6 privatiser pyinstaller
 
-/opt/build-venv/bin/pyinstaller \
+pyinstaller \
     --name privatiser \
     --onedir \
     --windowed \
