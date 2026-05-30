@@ -446,9 +446,10 @@ class DropTextEdit(QTextEdit):
 # ── Read-only output editor with whitelist context menu ───────────────────────
 
 class OutputTextEdit(QTextEdit):
-    """Read-only output pane that emits signals to add selected text to the whitelist or redact it."""
+    """Read-only output pane with context menu for redacting, adding to Redacted Words or Whitelist."""
 
     word_selected = pyqtSignal(str)
+    whitelist_requested = pyqtSignal(str)
     redact_requested = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -465,12 +466,14 @@ class OutputTextEdit(QTextEdit):
             redact_action.setStatusTip("Replace the selected text with a unique redaction tag")
             redact_action.triggered.connect(self.redact_requested.emit)
             menu.addSeparator()
-            action = menu.addAction(f'Add "{selection[:40]}" to Whitelist')
+            action = menu.addAction(f'Add "{selection[:40]}" to Redacted Words')
             action.setIcon(QIcon.fromTheme("list-add"))
-            action.setStatusTip(
-                "Add the selected text to the Whitelist (Never Redact) in Settings"
-            )
+            action.setStatusTip("Add the selected text to the Redacted Words list in Settings")
             action.triggered.connect(lambda: self.word_selected.emit(selection))
+            action2 = menu.addAction(f'Add "{selection[:40]}" to Whitelist')
+            action2.setIcon(QIcon.fromTheme("list-add"))
+            action2.setStatusTip("Add the selected text to the Whitelist (Never Redact) in Settings")
+            action2.triggered.connect(lambda: self.whitelist_requested.emit(selection))
         menu.exec(event.globalPos())
 
 
@@ -700,7 +703,8 @@ class MainWindow(QMainWindow):
             "Right-click a selection to redact it or add it to the Whitelist."
         )
         self._output_edit.selectionChanged.connect(self._on_output_selection_changed)
-        self._output_edit.word_selected.connect(self._add_to_whitelist)
+        self._output_edit.word_selected.connect(self._add_to_redacted_words)
+        self._output_edit.whitelist_requested.connect(self._add_to_whitelist)
         self._output_edit.redact_requested.connect(self._redact_selection)
         layout.addWidget(self._output_edit)
         return frame
