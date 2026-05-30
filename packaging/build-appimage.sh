@@ -1,26 +1,19 @@
 #!/bin/bash
-# Runs inside python:3.12-slim (Debian Bookworm, glibc 2.36) to produce an AppImage.
-# pip works out of the box in official Python images — no PEP 668 constraints.
-# Called by .github/workflows/build-appimage.yml via docker run.
+# Builds a cross-distro AppImage.
+# Called by .github/workflows/build-appimage.yml after system deps and a
+# Python venv have already been set up by earlier workflow steps.
+# PY and PYINSTALLER env vars point into the venv; fall back to bare names
+# for local testing.
 set -euo pipefail
 
-export DEBIAN_FRONTEND=noninteractive
+PY="${PY:-python3}"
+PYINSTALLER="${PYINSTALLER:-pyinstaller}"
 
-apt-get update -qq
-apt-get install -y --no-install-recommends \
-    binutils patchelf \
-    wget \
-    imagemagick \
-    libxcb-cursor0 libxcb1 libx11-6 libgl1 libglib2.0-0
-
-pip install --quiet --upgrade pip
-pip install --quiet PyQt6 privatiser pyinstaller
-
-pyinstaller \
+"$PYINSTALLER" \
     --name privatiser \
     --onedir \
     --windowed \
-    --collect-all PyQt6 \
+    --collect-data PyQt6 \
     main.py
 
 # Placeholder icon — replace docs/icon.png in the repo to override
@@ -38,12 +31,12 @@ APPDIR="Privatiser.AppDir"
 mkdir -p "${APPDIR}/usr/bin"
 cp -r dist/privatiser/. "${APPDIR}/usr/bin/"
 
-install -m 755 packaging/AppRun          "${APPDIR}/AppRun"
+install -m 755 packaging/AppRun             "${APPDIR}/AppRun"
 install -m 644 packaging/privatiser.desktop "${APPDIR}/privatiser.desktop"
-install -m 644 privatiser.png             "${APPDIR}/privatiser.png"
+install -m 644 privatiser.png               "${APPDIR}/privatiser.png"
 
 # Download appimagetool (itself an AppImage; use APPIMAGE_EXTRACT_AND_RUN=1
-# to avoid needing FUSE inside Docker)
+# to avoid needing FUSE)
 wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage" \
     -O appimagetool
 chmod +x appimagetool

@@ -32,14 +32,28 @@ jobs:
             echo "version=0.0.0~git${SHORT}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build AppImage (python:3.12-slim container)
+      # ── Install system deps ────────────────────────────────────────────────
+      - name: Install system dependencies
         run: |
-          docker run --rm \
-            -e VERSION="${{ steps.version.outputs.version }}" \
-            -v "${PWD}:/workspace" \
-            -w /workspace \
-            python:3.12-slim \
-            bash packaging/build-appimage.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            binutils patchelf imagemagick \
+            libxcb-cursor0 libxcb1 libx11-6 libgl1 libglib2.0-0
+
+      # ── Python deps in a venv ──────────────────────────────────────────────
+      - name: Install Python packages
+        run: |
+          python3 -m venv /opt/build-venv
+          /opt/build-venv/bin/pip install --quiet --upgrade pip
+          /opt/build-venv/bin/pip install --quiet PyQt6 privatiser pyinstaller
+
+      # ── Build ──────────────────────────────────────────────────────────────
+      - name: Build AppImage
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PY: /opt/build-venv/bin/python3
+          PYINSTALLER: /opt/build-venv/bin/pyinstaller
+        run: bash packaging/build-appimage.sh
 
       # ── Verify ────────────────────────────────────────────────────────────
       - name: Verify AppImage exists
@@ -57,8 +71,6 @@ jobs:
           retention-days: 30
 
       # ── Publish to GitHub Release on version tags ─────────────────────────
-      # softprops/action-gh-release will create the release if it doesn't
-      # exist yet, or add this file to it if the .deb workflow got there first.
       - name: Publish to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
