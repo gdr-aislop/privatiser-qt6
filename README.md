@@ -44,14 +44,22 @@ python3 main.py
 
 ## Pre-built packages
 
-`.deb` packages for Ubuntu 24.04 are built automatically by CI:
+Both a `.deb` (Ubuntu 24.04) and a cross-distro AppImage are built automatically by CI.
 
-- **Tagged releases** — [GitHub Releases](https://github.com/gdr-aislop/privatiser-qt6/releases) — pick the `.deb` from the release assets
-- **Every commit** — [GitHub Actions](https://github.com/gdr-aislop/privatiser-qt6/actions) → latest run → *privatiser-deb-ubuntu2404* artifact (kept for 30 days)
+**Tagged releases** — [GitHub Releases](https://github.com/gdr-aislop/privatiser-qt6/releases) — pick the `.deb` or `.AppImage` from the release assets.
 
-Install with:
+**Every commit** — [GitHub Actions](https://github.com/gdr-aislop/privatiser-qt6/actions) → latest run → *privatiser-deb-ubuntu2404* or *privatiser-appimage* artifact (kept for 30 days).
+
+### .deb (Ubuntu 24.04)
 
 ```bash
 sudo apt install python3-pyqt6
 sudo dpkg -i privatiser_*_all.deb
+```
+
+### AppImage (any Linux)
+
+```bash
+chmod +x Privatiser-*.AppImage
+./Privatiser-*.AppImage
 ```
