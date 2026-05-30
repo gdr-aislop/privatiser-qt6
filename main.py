@@ -392,9 +392,10 @@ class CollapsibleSection(QWidget):
 # ── Drop-aware input editor ────────────────────────────────────────────────────
 
 class DropTextEdit(QTextEdit):
-    """QTextEdit that accepts file drops and emits a signal to add selected text to Redacted Words."""
+    """QTextEdit that accepts file drops and emits signals to add selected text to Redacted Words or Whitelist."""
 
     word_selected = pyqtSignal(str)
+    whitelist_requested = pyqtSignal(str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -407,10 +408,12 @@ class DropTextEdit(QTextEdit):
             menu.addSeparator()
             action = menu.addAction(f'Add "{selection[:40]}" to Redacted Words')
             action.setIcon(QIcon.fromTheme("list-add"))
-            action.setStatusTip(
-                "Add the selected text to the Redacted Words list in Settings"
-            )
+            action.setStatusTip("Add the selected text to the Redacted Words list in Settings")
             action.triggered.connect(lambda: self.word_selected.emit(selection))
+            action2 = menu.addAction(f'Add "{selection[:40]}" to Whitelist')
+            action2.setIcon(QIcon.fromTheme("list-add"))
+            action2.setStatusTip("Add the selected text to the Whitelist (Never Redact) in Settings")
+            action2.triggered.connect(lambda: self.whitelist_requested.emit(selection))
         menu.exec(event.globalPos())
 
     def dragEnterEvent(self, event) -> None:
@@ -658,6 +661,7 @@ class MainWindow(QMainWindow):
             "Right-click a selection to add it to Redacted Words."
         )
         self._input_edit.word_selected.connect(self._add_to_redacted_words)
+        self._input_edit.whitelist_requested.connect(self._add_to_whitelist)
         layout.addWidget(self._input_edit)
         return frame
 
