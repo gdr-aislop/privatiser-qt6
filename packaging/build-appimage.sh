@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs inside ubuntu:22.04 (glibc 2.35, Python 3.10) to produce an AppImage.
+# Runs inside ubuntu:24.04 (glibc 2.39, Python 3.12) to produce an AppImage.
 # Called by .github/workflows/build-appimage.yml via docker run.
 set -euo pipefail
 
