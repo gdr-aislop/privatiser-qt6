@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs inside ubuntu:20.04 (glibc 2.31) to produce a cross-distro AppImage.
+# Runs inside ubuntu:22.04 (glibc 2.35, Python 3.10) to produce an AppImage.
 # Called by .github/workflows/build-appimage.yml via docker run.
 set -euo pipefail
 
@@ -13,10 +13,6 @@ apt-get install -y --no-install-recommends \
     imagemagick \
     libxcb-cursor0 libxcb1 libx11-6 libgl1 libglib2.0-0
 
-# Upgrade pip first — Ubuntu 20.04 ships pip 20 which is too old to resolve
-# PyQt6 manylinux_2_28 wheel tags and falls back to a source build (needs qmake).
-# Use python3 -m pip throughout so we always hit the upgraded module, not the
-# stale /usr/bin/pip3 wrapper that stays on the old version after self-upgrade.
 python3 -m pip install --quiet --upgrade pip
 python3 -m pip install --quiet PyQt6 privatiser pyinstaller
 
