@@ -6,7 +6,7 @@ import re
 import sys
 from typing import Optional
 
-from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtCore import QSettings, Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QFont, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
@@ -336,11 +336,25 @@ class CollapsibleSection(QWidget):
 # ── Drop-aware input editor ────────────────────────────────────────────────────
 
 class DropTextEdit(QTextEdit):
-    """QTextEdit that accepts file drops."""
+    """QTextEdit that accepts file drops and emits a signal to add selected text as a custom word."""
+
+    word_selected = pyqtSignal(str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setAcceptDrops(True)
+
+    def contextMenuEvent(self, event) -> None:
+        menu = self.createStandardContextMenu()
+        selection = self.textCursor().selectedText().strip()
+        if selection:
+            menu.addSeparator()
+            action = menu.addAction(f'Add "{selection[:40]}" to Custom Words')
+            action.setStatusTip(
+                "Add the selected text to the Custom Words to Redact list in Settings"
+            )
+            action.triggered.connect(lambda: self.word_selected.emit(selection))
+        menu.exec(event.globalPos())
 
     def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasUrls() or event.mimeData().hasText():
@@ -509,8 +523,10 @@ class MainWindow(QMainWindow):
         self._input_edit.setAccessibleName("Input text")
         self._input_edit.setAccessibleDescription(
             "Editable pane. Enter or paste text to anonymize. "
-            "Drag and drop text files onto this area."
+            "Drag and drop text files onto this area. "
+            "Right-click a selection to add it to Custom Words."
         )
+        self._input_edit.word_selected.connect(self._add_to_custom_words)
         layout.addWidget(self._input_edit)
         return frame
 
@@ -906,6 +922,23 @@ class MainWindow(QMainWindow):
     def _load_sample(self) -> None:
         self._input_edit.setPlainText(SAMPLE_TEXT)
         self._status("Sample text loaded.")
+
+    def _add_to_custom_words(self, word: str) -> None:
+        word = word.strip()
+        if not word:
+            return
+        existing = self._parse_csv(self._custom_words_edit.text())
+        if word in existing:
+            self._status(f'"{word}" is already in Custom Words.')
+            return
+        existing.append(word)
+        self._custom_words_edit.setText(", ".join(existing))
+        # Make sure the settings panel is visible and expanded so the user sees the change
+        self._settings_sec.setVisible(True)
+        self._settings_toggle.setChecked(True)
+        self._settings_sec.set_expanded(True)
+        preview = word[:40] + ("…" if len(word) > 40 else "")
+        self._status(f'Added "{preview}" to Custom Words.')
 
     # ── Mapping table ──────────────────────────────────────────────────────────
 
