@@ -443,9 +443,10 @@ class DropTextEdit(QTextEdit):
 # ── Read-only output editor with whitelist context menu ───────────────────────
 
 class OutputTextEdit(QTextEdit):
-    """Read-only output pane that emits a signal to add selected text to the whitelist."""
+    """Read-only output pane that emits signals to add selected text to the whitelist or redact it."""
 
     word_selected = pyqtSignal(str)
+    redact_requested = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -455,6 +456,11 @@ class OutputTextEdit(QTextEdit):
         menu = self.createStandardContextMenu()
         selection = self.textCursor().selectedText().strip()
         if selection:
+            menu.addSeparator()
+            redact_action = menu.addAction("Redact Selection")
+            redact_action.setIcon(QIcon.fromTheme("edit-cut"))
+            redact_action.setStatusTip("Replace the selected text with a unique redaction tag")
+            redact_action.triggered.connect(self.redact_requested.emit)
             menu.addSeparator()
             action = menu.addAction(f'Add "{selection[:40]}" to Whitelist')
             action.setIcon(QIcon.fromTheme("list-add"))
@@ -662,9 +668,10 @@ class MainWindow(QMainWindow):
 
         self._redact_sel_btn = self._header_btn(
             "Redact Selection",
-            "Manually redact the selected text in the output pane"
+            "Manually redact the selected text in the output pane  (Ctrl+R)"
         )
         self._redact_sel_btn.setEnabled(False)
+        self._redact_sel_btn.setShortcut(QKeySequence("Ctrl+R"))
         self._redact_sel_btn.setAccessibleName("Redact selected text in output")
         self._redact_sel_btn.clicked.connect(self._redact_selection)
         hl.addWidget(self._redact_sel_btn)
@@ -686,10 +693,11 @@ class MainWindow(QMainWindow):
         self._output_edit.setAccessibleName("Output text")
         self._output_edit.setAccessibleDescription(
             "Read-only pane showing the anonymized or deanonymized result. "
-            "Right-click a selection to add it to the Whitelist."
+            "Right-click a selection to redact it or add it to the Whitelist."
         )
         self._output_edit.selectionChanged.connect(self._on_output_selection_changed)
         self._output_edit.word_selected.connect(self._add_to_whitelist)
+        self._output_edit.redact_requested.connect(self._redact_selection)
         layout.addWidget(self._output_edit)
         return frame
 
