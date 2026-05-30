@@ -151,6 +151,21 @@ DARK_STYLESHEET = """
     QPushButton[class="secondary"]:focus {
         border: 2px solid #4fc3f7;
     }
+    QPushButton[class="companion"] {
+        background-color: #1a2e45;
+        color: #a0c4e0;
+        border: 1px solid #2a4a6a;
+        font-size: 12pt;
+        padding: 8px 16px;
+        min-height: 40px;
+    }
+    QPushButton[class="companion"]:hover {
+        background-color: #243d58;
+        color: #d0e8f8;
+    }
+    QPushButton[class="companion"]:focus {
+        border: 2px solid #4fc3f7;
+    }
     QPushButton[class="danger"] {
         background-color: #2a2a2a;
         color: #e07070;
@@ -613,42 +628,65 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout()
         row.setSpacing(8)
 
-        self._anon_btn = QPushButton("Anonymize")
-        self._anon_btn.setProperty("class", "primary")
-        self._anon_btn.setShortcut(QKeySequence("Ctrl+Shift+A"))
-        self._anon_btn.setToolTip("Anonymize input text  (Ctrl+Shift+A)")
-        self._anon_btn.setAccessibleName("Anonymize")
-        self._anon_btn.setAccessibleDescription(
-            "Anonymize the input text using current settings. "
-            "Keyboard shortcut: Ctrl+Shift+A"
-        )
-        self._anon_btn.clicked.connect(self._run_anonymize)
+        def _main_btn(label, shortcut, tip, slot, cls="secondary"):
+            b = QPushButton(label)
+            b.setProperty("class", cls)
+            b.setMinimumHeight(40)
+            if shortcut:
+                b.setShortcut(QKeySequence(shortcut))
+            b.setToolTip(f"{tip}  ({shortcut})" if shortcut else tip)
+            b.clicked.connect(slot)
+            return b
 
-        self._deanon_btn = QPushButton("Deanonymize")
-        self._deanon_btn.setProperty("class", "secondary")
-        self._deanon_btn.setShortcut(QKeySequence("Ctrl+Shift+D"))
-        self._deanon_btn.setToolTip(
-            "Restore anonymized output to original using the current mapping  (Ctrl+Shift+D)"
+        def _companion_btn(label, tip, slot):
+            b = QPushButton(label)
+            b.setProperty("class", "companion")
+            b.setMinimumHeight(40)
+            b.setToolTip(tip)
+            b.clicked.connect(slot)
+            return b
+
+        self._anon_btn = _main_btn(
+            "Anonymize", "Ctrl+Shift+A",
+            "Anonymize the input text",
+            self._run_anonymize, cls="primary",
+        )
+        self._anon_btn.setAccessibleName("Anonymize")
+
+        anon_copy_btn = _companion_btn(
+            "&& Copy",
+            "Anonymize then copy the result to the clipboard",
+            self._run_anon_and_copy,
+        )
+        anon_copy_btn.setAccessibleName("Anonymize and copy")
+
+        paste_deanon_btn = _companion_btn(
+            "Paste &&",
+            "Paste clipboard text into the output pane then deanonymize it",
+            self._paste_and_deanon,
+        )
+        paste_deanon_btn.setAccessibleName("Paste and deanonymize")
+
+        self._deanon_btn = _main_btn(
+            "Deanonymize", "Ctrl+Shift+D",
+            "Restore anonymized output to original using the current mapping",
+            self._run_deanonymize,
         )
         self._deanon_btn.setAccessibleName("Deanonymize")
-        self._deanon_btn.setAccessibleDescription(
-            "Restore anonymized text in the output pane back to the original, "
-            "writing the result into the input pane. Requires a mapping to be loaded. "
-            "Keyboard shortcut: Ctrl+Shift+D"
-        )
-        self._deanon_btn.clicked.connect(self._run_deanonymize)
 
-        clear_btn = QPushButton("Clear All")
+        clear_btn = _main_btn("Clear All", "", "Clear input, output, and mapping", self._clear_all)
         clear_btn.setProperty("class", "danger")
-        clear_btn.setToolTip("Clear input, output, and mapping")
         clear_btn.setAccessibleName("Clear all")
-        clear_btn.setAccessibleDescription("Clear both text panes and the mapping table.")
-        clear_btn.clicked.connect(self._clear_all)
 
         row.addStretch()
         row.addWidget(self._anon_btn)
+        row.addSpacing(2)
+        row.addWidget(anon_copy_btn)
+        row.addSpacing(24)
+        row.addWidget(paste_deanon_btn)
+        row.addSpacing(2)
         row.addWidget(self._deanon_btn)
-        row.addSpacing(16)
+        row.addSpacing(24)
         row.addWidget(clear_btn)
         row.addStretch()
         return row
@@ -697,11 +735,11 @@ class MainWindow(QMainWindow):
         bl.addWidget(self._custom_words_edit)
         bl.addWidget(self._hint("Comma-separated. Always redacted, regardless of pattern."))
 
-        # Allowlist
-        bl.addWidget(self._field_label("Allowlist (Never Redact)"))
+        # Whitelist
+        bl.addWidget(self._field_label("Whitelist (Never Redact)"))
         self._allowlist_edit = self._settings_lineedit(
             placeholder="localhost, example.com",
-            accessible_name="Allowlist — never redact",
+            accessible_name="Whitelist — never redact",
             accessible_desc="Comma-separated values that will never be redacted",
         )
         bl.addWidget(self._allowlist_edit)
@@ -831,6 +869,44 @@ class MainWindow(QMainWindow):
 
         self._input_edit.setPlainText(result)
         self._status("Deanonymized — original text restored to input pane.")
+
+    def _run_anon_and_copy(self) -> None:
+        text = self._input_edit.toPlainText()
+        if not text.strip():
+            self._status("No input text to anonymize.", error=True)
+            return
+        try:
+            result, mapping = self._make_privatiser().anonymize(text)
+        except Exception as exc:
+            self._status(f"Anonymization failed: {exc}", error=True)
+            return
+        self._mapping = mapping
+        self._output_edit.setPlainText(result)
+        self._populate_mapping(mapping)
+        QApplication.clipboard().setText(result)
+        n = len(mapping)
+        self._status(f"Anonymized and copied to clipboard — {n} replacement{'s' if n != 1 else ''}.")
+
+    def _paste_and_deanon(self) -> None:
+        text = QApplication.clipboard().text()
+        if not text:
+            self._status("Clipboard is empty.", error=True)
+            return
+        if not self._mapping:
+            self._status(
+                "No mapping available. Run Anonymize first, or load a mapping via "
+                "File → Load Mapping…",
+                error=True,
+            )
+            return
+        self._output_edit.setPlainText(text)
+        try:
+            result = self._make_privatiser().deanonymize(text, self._mapping)
+        except Exception as exc:
+            self._status(f"Deanonymization failed: {exc}", error=True)
+            return
+        self._input_edit.setPlainText(result)
+        self._status("Pasted and deanonymized — original text restored to input pane.")
 
     def _redact_selection(self) -> None:
         cursor = self._output_edit.textCursor()
