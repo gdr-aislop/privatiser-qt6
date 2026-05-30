@@ -391,7 +391,7 @@ class CollapsibleSection(QWidget):
 # ── Drop-aware input editor ────────────────────────────────────────────────────
 
 class DropTextEdit(QTextEdit):
-    """QTextEdit that accepts file drops and emits a signal to add selected text as a custom word."""
+    """QTextEdit that accepts file drops and emits a signal to add selected text to Redacted Words."""
 
     word_selected = pyqtSignal(str)
 
@@ -404,10 +404,10 @@ class DropTextEdit(QTextEdit):
         selection = self.textCursor().selectedText().strip()
         if selection:
             menu.addSeparator()
-            action = menu.addAction(f'Add "{selection[:40]}" to Custom Words')
+            action = menu.addAction(f'Add "{selection[:40]}" to Redacted Words')
             action.setIcon(QIcon.fromTheme("list-add"))
             action.setStatusTip(
-                "Add the selected text to the Custom Words to Redact list in Settings"
+                "Add the selected text to the Redacted Words list in Settings"
             )
             action.triggered.connect(lambda: self.word_selected.emit(selection))
         menu.exec(event.globalPos())
@@ -647,9 +647,9 @@ class MainWindow(QMainWindow):
         self._input_edit.setAccessibleDescription(
             "Editable pane. Enter or paste text to anonymize. "
             "Drag and drop text files onto this area. "
-            "Right-click a selection to add it to Custom Words."
+            "Right-click a selection to add it to Redacted Words."
         )
-        self._input_edit.word_selected.connect(self._add_to_custom_words)
+        self._input_edit.word_selected.connect(self._add_to_redacted_words)
         layout.addWidget(self._input_edit)
         return frame
 
@@ -801,14 +801,14 @@ class MainWindow(QMainWindow):
         cat_group.setLayout(cat_layout)
         bl.addWidget(cat_group)
 
-        # Custom words
-        bl.addWidget(self._field_label("Custom Words to Redact"))
-        self._custom_words_edit = self._settings_lineedit(
+        # Redacted words
+        bl.addWidget(self._field_label("Redacted Words"))
+        self._redacted_words_edit = self._settings_lineedit(
             placeholder="mycompany, john.smith, prod-server-1",
-            accessible_name="Custom words to redact",
+            accessible_name="Redacted words",
             accessible_desc="Comma-separated words that are always redacted regardless of pattern",
         )
-        bl.addWidget(self._custom_words_edit)
+        bl.addWidget(self._redacted_words_edit)
         bl.addWidget(self._hint("Comma-separated. Always redacted, regardless of pattern."))
 
         # Whitelist
@@ -871,13 +871,13 @@ class MainWindow(QMainWindow):
     def _make_privatiser(self) -> Privatiser:
         enabled = {k: cb.isChecked() for k, cb in self._cat_checks.items()}
         allowlist = self._parse_csv(self._allowlist_edit.text())
-        custom_words = self._parse_csv(self._custom_words_edit.text())
+        redacted_words = self._parse_csv(self._redacted_words_edit.text())
 
         extra: list[PatternHandler] = []
-        for i, word in enumerate(custom_words, start=1):
+        for i, word in enumerate(redacted_words, start=1):
             tag = f"REDACTED_CUSTOM_{i}"
             extra.append(PatternHandler(
-                name=f"custom_word_{i}",
+                name=f"redacted_word_{i}",
                 category="custom",
                 regex=re.compile(re.escape(word), re.IGNORECASE),
                 pseudonym_fn=lambda n, t=tag: t,
@@ -1100,22 +1100,22 @@ class MainWindow(QMainWindow):
         self._input_edit.setFocus()
         self._input_edit.selectAll()
 
-    def _add_to_custom_words(self, word: str) -> None:
+    def _add_to_redacted_words(self, word: str) -> None:
         word = word.strip()
         if not word:
             return
-        existing = self._parse_csv(self._custom_words_edit.text())
+        existing = self._parse_csv(self._redacted_words_edit.text())
         if word in existing:
-            self._status(f'"{word}" is already in Custom Words.')
+            self._status(f'"{word}" is already in Redacted Words.')
             return
         existing.append(word)
-        self._custom_words_edit.setText(", ".join(existing))
+        self._redacted_words_edit.setText(", ".join(existing))
         # Make sure the settings panel is visible and expanded so the user sees the change
         self._settings_sec.setVisible(True)
         self._settings_toggle.setChecked(True)
         self._settings_sec.set_expanded(True)
         preview = word[:40] + ("…" if len(word) > 40 else "")
-        self._status(f'Added "{preview}" to Custom Words.')
+        self._status(f'Added "{preview}" to Redacted Words.')
 
     def _add_to_whitelist(self, word: str) -> None:
         word = word.strip()
@@ -1189,7 +1189,7 @@ class MainWindow(QMainWindow):
         for key, cb in self._cat_checks.items():
             cb.setChecked(self._settings.value(f"cat/{key}", True, bool))
 
-        self._custom_words_edit.setText(self._settings.value("custom_words", "", str))
+        self._redacted_words_edit.setText(self._settings.value("redacted_words", "", str))
         self._allowlist_edit.setText(self._settings.value("allowlist", "", str))
 
         self._settings_sec.set_expanded(
@@ -1211,7 +1211,7 @@ class MainWindow(QMainWindow):
         for key, cb in self._cat_checks.items():
             self._settings.setValue(f"cat/{key}", cb.isChecked())
         self._settings.setValue("theme/dark",    self._dark_action.isChecked())
-        self._settings.setValue("custom_words",  self._custom_words_edit.text())
+        self._settings.setValue("redacted_words",  self._redacted_words_edit.text())
         self._settings.setValue("allowlist",     self._allowlist_edit.text())
         self._settings.setValue("view/settings_expanded", self._settings_sec._expanded)
         self._settings.setValue("view/mapping_expanded",  self._mapping_sec._expanded)
