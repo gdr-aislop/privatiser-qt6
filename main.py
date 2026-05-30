@@ -449,6 +449,8 @@ class MainWindow(QMainWindow):
             self._settings.value("window/height", 760,  int),
         )
 
+        self._system_font_size = QApplication.font().pointSize()
+
         self._build_menu()
         self._build_ui()
         self._build_statusbar()
@@ -1093,7 +1095,10 @@ class MainWindow(QMainWindow):
         self._set_font_size(max(QApplication.font().pointSize() - 1, 8))
 
     def _reset_font(self) -> None:
-        self._set_font_size(13)
+        self._settings.remove("font_size")
+        font = QApplication.font()
+        font.setPointSize(self._system_font_size)
+        QApplication.setFont(font)
 
     def _set_font_size(self, size: int) -> None:
         font = QApplication.font()
@@ -1104,10 +1109,10 @@ class MainWindow(QMainWindow):
     # ── Settings persistence ───────────────────────────────────────────────────
 
     def _restore_settings(self) -> None:
-        size = self._settings.value("font_size", 13, int)
-        font = QApplication.font()
-        font.setPointSize(size)
-        QApplication.setFont(font)
+        if self._settings.contains("font_size"):
+            font = QApplication.font()
+            font.setPointSize(self._settings.value("font_size", type=int))
+            QApplication.setFont(font)
 
         for key, cb in self._cat_checks.items():
             cb.setChecked(self._settings.value(f"cat/{key}", True, bool))
@@ -1259,10 +1264,6 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Privatiser")
     app.setOrganizationName("Privatiser")
-
-    font = QFont()
-    font.setPointSize(13)
-    app.setFont(font)
 
     window = MainWindow()
     window.show()
