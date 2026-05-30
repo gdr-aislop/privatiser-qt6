@@ -29,7 +29,7 @@ jobs:
             echo "version=0.0.0~git${SHORT}" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── System build tools only — no PyQt6 here, that's a runtime dep ─────
+      # ── System build tools only — PyQt6 is a runtime dep, not needed here ─
       - name: Install system build dependencies
         run: |
           sudo apt-get update -qq
@@ -38,20 +38,18 @@ jobs:
             python3-venv
 
       # ── Vendor the privatiser library ──────────────────────────────────────
-      # PyQt6 is available as the system package python3-pyqt6 and is declared
-      # as a Depends, so we do NOT vendor it. Only privatiser (PyPI-only) needs
-      # to be shipped inside the .deb.
+      # PyQt6 ships as python3-pyqt6 in Ubuntu 24.04 and is declared as a
+      # Depends, so we do NOT vendor it.  Only privatiser (PyPI-only) is
+      # bundled inside the .deb.
       - name: Vendor privatiser into package tree
         run: |
           pip install \
             --target vendor \
             --no-compile \
             privatiser
-
-          # Drop bytecode and dist-info cruft to keep the package lean
-          find vendor -name "*.pyc" -delete
-          find vendor -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-          find vendor -name "*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+          find vendor -name "*.pyc"         -delete
+          find vendor -name "__pycache__"   -type d -exec rm -rf {} + 2>/dev/null || true
+          find vendor -name "*.dist-info"   -type d -exec rm -rf {} + 2>/dev/null || true
 
       # ── Assemble .deb ──────────────────────────────────────────────────────
       - name: Assemble .deb
@@ -59,67 +57,51 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # Pure-Python package → architecture: all
           PKG="privatiser_${VERSION}_all"
 
           install -d "${PKG}/DEBIAN"
-          install -d "${PKG}/usr/share/privatiser"
           install -d "${PKG}/usr/share/privatiser/vendor"
           install -d "${PKG}/usr/bin"
           install -d "${PKG}/usr/share/applications"
           install -d "${PKG}/usr/share/doc/privatiser"
 
-          # Application source
-          install -m 644 main.py "${PKG}/usr/share/privatiser/"
+          # Application source and vendored library
+          install -m 644 main.py             "${PKG}/usr/share/privatiser/"
+          cp -r vendor/.                     "${PKG}/usr/share/privatiser/vendor/"
 
-          # Vendored privatiser library (only this; PyQt6 comes from the system)
-          cp -r vendor/. "${PKG}/usr/share/privatiser/vendor/"
+          # Launcher and .desktop come from packaging/ in the repo,
+          # avoiding heredocs with column-0 body lines that break YAML.
+          install -m 755 packaging/launcher  "${PKG}/usr/bin/privatiser"
+          install -m 644 packaging/privatiser.desktop \
+            "${PKG}/usr/share/applications/privatiser.desktop"
 
-          # Launcher — prepend vendor dir so privatiser is importable,
-          # then hand off to the system python3 and system PyQt6
-          cat > "${PKG}/usr/bin/privatiser" <<'LAUNCHER'
-#!/bin/sh
-PYTHONPATH=/usr/share/privatiser/vendor${PYTHONPATH:+:$PYTHONPATH}
-export PYTHONPATH
-exec python3 /usr/share/privatiser/main.py "$@"
-LAUNCHER
-          chmod 755 "${PKG}/usr/bin/privatiser"
+          # Copyright (Debian policy requires this file)
+          printf 'Privatiser desktop GUI\nMIT License — see https://privatiser.net\n' \
+            > "${PKG}/usr/share/doc/privatiser/copyright"
 
-          # .desktop entry for application menus
-          cat > "${PKG}/usr/share/applications/privatiser.desktop" <<'DESKTOP'
-[Desktop Entry]
-Name=Privatiser
-Comment=Anonymize sensitive data in text — runs fully locally
-Exec=privatiser
-Icon=privatiser
-Type=Application
-Categories=Utility;Security;
-Terminal=false
-StartupWMClass=privatiser
-DESKTOP
-
-          # Minimal copyright notice required by Debian policy
-          cat > "${PKG}/usr/share/doc/privatiser/copyright" <<'CR'
-Privatiser desktop GUI
-MIT License — see https://privatiser.net
-CR
-
-          # control — Installed-Size in kibibytes; arch:all; system deps only
+          # control file — generated with Python so variable substitution
+          # stays within the YAML block indentation (no column-0 content)
           INSTALLED_SIZE=$(du -sk "${PKG}/usr" | cut -f1)
-          cat > "${PKG}/DEBIAN/control" <<EOF
-Package: privatiser
-Version: ${VERSION}
-Architecture: all
-Maintainer: Privatiser <info@privatiser.net>
-Installed-Size: ${INSTALLED_SIZE}
-Depends: python3 (>= 3.10), python3-pyqt6
-Section: utils
-Priority: optional
-Description: Privatiser — text anonymization desktop GUI
- Anonymizes IPs, API keys, secrets, PII, and cloud identifiers
- from any text. Fully reversible. Everything runs locally —
- nothing leaves the machine.
-EOF
+          python3 -c "
+          import os, pathlib, textwrap
+          v = os.environ['VERSION']
+          s = os.environ['INSTALLED_SIZE']
+          control = textwrap.dedent(f'''
+              Package: privatiser
+              Version: {v}
+              Architecture: all
+              Maintainer: Privatiser <info@privatiser.net>
+              Installed-Size: {s}
+              Depends: python3 (>= 3.10), python3-pyqt6
+              Section: utils
+              Priority: optional
+              Description: Privatiser — text anonymization desktop GUI
+               Anonymizes IPs, API keys, secrets, PII, and cloud identifiers
+               from any text. Fully reversible. Everything runs locally —
+               nothing leaves the machine.
+          ''').lstrip()
+          pathlib.Path('${PKG}/DEBIAN/control').write_text(control)
+          " INSTALLED_SIZE="${INSTALLED_SIZE}"
 
           dpkg-deb --build --root-owner-group "${PKG}"
           echo "deb=${PKG}.deb" >> "$GITHUB_OUTPUT"
@@ -128,7 +110,7 @@ EOF
       - name: Inspect .deb
         run: dpkg-deb --info "${{ steps.deb.outputs.deb }}"
 
-      # ── Smoke-test: install the .deb and check the launcher is present ─────
+      # ── Smoke-test: install the .deb and exercise the library ──────────────
       - name: Install and smoke-test .deb
         run: |
           sudo apt-get install -y python3-pyqt6
