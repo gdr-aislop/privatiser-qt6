@@ -81,7 +81,7 @@ jobs:
 
           # control file — generated with Python so variable substitution
           # stays within the YAML block indentation (no column-0 content)
-          INSTALLED_SIZE=$(du -sk "${PKG}/usr" | cut -f1)
+          export INSTALLED_SIZE=$(du -sk "${PKG}/usr" | cut -f1)
           python3 -c "
           import os, pathlib, textwrap
           v = os.environ['VERSION']
@@ -101,7 +101,7 @@ jobs:
                nothing leaves the machine.
           ''').lstrip()
           pathlib.Path('${PKG}/DEBIAN/control').write_text(control)
-          " INSTALLED_SIZE="${INSTALLED_SIZE}"
+          "
 
           dpkg-deb --build --root-owner-group "${PKG}"
           echo "deb=${PKG}.deb" >> "$GITHUB_OUTPUT"
