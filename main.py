@@ -433,6 +433,30 @@ class DropTextEdit(QTextEdit):
         super().dropEvent(event)
 
 
+# ── Read-only output editor with whitelist context menu ───────────────────────
+
+class OutputTextEdit(QTextEdit):
+    """Read-only output pane that emits a signal to add selected text to the whitelist."""
+
+    word_selected = pyqtSignal(str)
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setReadOnly(True)
+
+    def contextMenuEvent(self, event) -> None:
+        menu = self.createStandardContextMenu()
+        selection = self.textCursor().selectedText().strip()
+        if selection:
+            menu.addSeparator()
+            action = menu.addAction(f'Add "{selection[:40]}" to Whitelist')
+            action.setStatusTip(
+                "Add the selected text to the Whitelist (Never Redact) in Settings"
+            )
+            action.triggered.connect(lambda: self.word_selected.emit(selection))
+        menu.exec(event.globalPos())
+
+
 # ── Main window ────────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
@@ -614,15 +638,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(header)
         layout.addWidget(self._hline())
 
-        self._output_edit = QTextEdit()
-        self._output_edit.setReadOnly(True)
+        self._output_edit = OutputTextEdit()
         self._output_edit.setTabChangesFocus(True)
         self._output_edit.setPlaceholderText("Anonymized output appears here…")
         self._output_edit.setAccessibleName("Output text")
         self._output_edit.setAccessibleDescription(
-            "Read-only pane showing the anonymized or deanonymized result."
+            "Read-only pane showing the anonymized or deanonymized result. "
+            "Right-click a selection to add it to the Whitelist."
         )
         self._output_edit.selectionChanged.connect(self._on_output_selection_changed)
+        self._output_edit.word_selected.connect(self._add_to_whitelist)
         layout.addWidget(self._output_edit)
         return frame
 
@@ -640,11 +665,12 @@ class MainWindow(QMainWindow):
             b.clicked.connect(slot)
             return b
 
-        def _companion_btn(label, tip, slot):
+        def _companion_btn(label, shortcut, tip, slot):
             b = QPushButton(label)
             b.setProperty("class", "companion")
             b.setMinimumHeight(40)
-            b.setToolTip(tip)
+            b.setShortcut(QKeySequence(shortcut))
+            b.setToolTip(f"{tip}  ({shortcut})")
             b.clicked.connect(slot)
             return b
 
@@ -656,18 +682,26 @@ class MainWindow(QMainWindow):
         self._anon_btn.setAccessibleName("Anonymize")
 
         anon_copy_btn = _companion_btn(
-            "&& Copy",
+            "&& Copy", "Ctrl+Return",
             "Anonymize then copy the result to the clipboard",
             self._run_anon_and_copy,
         )
         anon_copy_btn.setAccessibleName("Anonymize and copy")
+        anon_copy_btn.setAccessibleDescription(
+            "Anonymize the input text and copy the result to the clipboard. "
+            "Keyboard shortcut: Ctrl+Return"
+        )
 
         paste_deanon_btn = _companion_btn(
-            "Paste &&",
+            "Paste &&", "Ctrl+Shift+Return",
             "Paste clipboard text into the output pane then deanonymize it",
             self._paste_and_deanon,
         )
         paste_deanon_btn.setAccessibleName("Paste and deanonymize")
+        paste_deanon_btn.setAccessibleDescription(
+            "Paste clipboard text into the output pane and deanonymize it. "
+            "Keyboard shortcut: Ctrl+Shift+Return"
+        )
 
         self._deanon_btn = _main_btn(
             "Deanonymize", "Ctrl+Shift+D",
@@ -1060,6 +1094,22 @@ class MainWindow(QMainWindow):
         self._settings_sec.set_expanded(True)
         preview = word[:40] + ("…" if len(word) > 40 else "")
         self._status(f'Added "{preview}" to Custom Words.')
+
+    def _add_to_whitelist(self, word: str) -> None:
+        word = word.strip()
+        if not word:
+            return
+        existing = self._parse_csv(self._allowlist_edit.text())
+        if word in existing:
+            self._status(f'"{word}" is already in the Whitelist.')
+            return
+        existing.append(word)
+        self._allowlist_edit.setText(", ".join(existing))
+        self._settings_sec.setVisible(True)
+        self._settings_toggle.setChecked(True)
+        self._settings_sec.set_expanded(True)
+        preview = word[:40] + ("…" if len(word) > 40 else "")
+        self._status(f'Added "{preview}" to Whitelist.')
 
     # ── Mapping table ──────────────────────────────────────────────────────────
 
