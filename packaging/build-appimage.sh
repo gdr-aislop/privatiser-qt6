@@ -13,8 +13,11 @@ apt-get install -y --no-install-recommends \
     imagemagick \
     libxcb-cursor0 libxcb1 libx11-6 libgl1 libglib2.0-0
 
-python3 -m pip install --quiet --upgrade pip
-python3 -m pip install --quiet PyQt6 privatiser pyinstaller
+# Ubuntu 24.04 enforces PEP 668 (externally-managed-environment).
+# Inside the Docker container we don't care about the system state, so
+# --break-system-packages is safe here.
+python3 -m pip install --quiet --break-system-packages --upgrade pip
+python3 -m pip install --quiet --break-system-packages PyQt6 privatiser pyinstaller
 
 pyinstaller \
     --name privatiser \
