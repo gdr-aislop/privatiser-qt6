@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSizePolicy,
@@ -841,14 +842,22 @@ class MainWindow(QMainWindow):
         self._mapping_table.setHorizontalHeaderLabels(["Original", "Replacement"])
         self._mapping_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._mapping_table.setAlternatingRowColors(True)
-        self._mapping_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._mapping_table.setEditTriggers(
+            QTableWidget.EditTrigger.DoubleClicked |
+            QTableWidget.EditTrigger.EditKeyPressed
+        )
         self._mapping_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._mapping_table.setMinimumHeight(160)
         self._mapping_table.setTabKeyNavigation(True)
         self._mapping_table.setAccessibleName("Mapping table")
         self._mapping_table.setAccessibleDescription(
-            "Two-column table listing every original value and its anonymized replacement."
+            "Two-column table. Original values in column one (read-only), "
+            "replacements in column two (double-click to edit). "
+            "Right-click a row to remove the replacement."
         )
+        self._mapping_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._mapping_table.customContextMenuRequested.connect(self._mapping_context_menu)
+        self._mapping_table.cellChanged.connect(self._on_mapping_cell_changed)
         self._mapping_table.setVisible(False)
         bl.addWidget(self._mapping_table)
 
@@ -994,7 +1003,9 @@ class MainWindow(QMainWindow):
         self._input_edit.clear()
         self._output_edit.clear()
         self._mapping = None
+        self._mapping_table.blockSignals(True)
         self._mapping_table.setRowCount(0)
+        self._mapping_table.blockSignals(False)
         self._mapping_table.setVisible(False)
         self._mapping_empty.setVisible(True)
         self._mapping_sec.set_title("Mapping Table  (0 items)")
@@ -1147,16 +1158,96 @@ class MainWindow(QMainWindow):
         self._mapping_empty.setVisible(False)
         self._mapping_table.setVisible(True)
 
+        self._mapping_table.blockSignals(True)
         for replacement, original in mapping.items():
             row = self._mapping_table.rowCount()
             self._mapping_table.insertRow(row)
-            self._mapping_table.setItem(row, 0, QTableWidgetItem(str(original)))
-            self._mapping_table.setItem(row, 1, QTableWidgetItem(str(replacement)))
+
+            original_item = QTableWidgetItem(str(original))
+            original_item.setFlags(original_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._mapping_table.setItem(row, 0, original_item)
+
+            replacement_item = QTableWidgetItem(str(replacement))
+            replacement_item.setData(Qt.ItemDataRole.UserRole, str(replacement))
+            self._mapping_table.setItem(row, 1, replacement_item)
+        self._mapping_table.blockSignals(False)
 
         n = len(mapping)
         label = f"Mapping Table  ({n} item{'s' if n != 1 else ''})"
         self._mapping_sec.set_title(label)
         self._status_count.setText(f"{n} replacement{'s' if n != 1 else ''}")
+
+    def _on_mapping_cell_changed(self, row: int, col: int) -> None:
+        if col != 1 or self._mapping is None:
+            return
+        item = self._mapping_table.item(row, col)
+        if not item:
+            return
+        new_replacement = item.text().strip()
+        old_replacement = item.data(Qt.ItemDataRole.UserRole)
+        if not new_replacement or new_replacement == old_replacement:
+            return
+
+        original = self._mapping.pop(old_replacement, None)
+        if original is None:
+            return
+        self._mapping[new_replacement] = original
+        item.setData(Qt.ItemDataRole.UserRole, new_replacement)
+
+        output = self._output_edit.toPlainText()
+        if old_replacement in output:
+            self._output_edit.setPlainText(output.replace(old_replacement, new_replacement))
+
+    def _mapping_context_menu(self, pos) -> None:
+        row = self._mapping_table.rowAt(pos.y())
+        if row < 0:
+            return
+        original_item = self._mapping_table.item(row, 0)
+        replacement_item = self._mapping_table.item(row, 1)
+        if not original_item or not replacement_item:
+            return
+
+        original = original_item.text()
+        replacement = replacement_item.data(Qt.ItemDataRole.UserRole) or replacement_item.text()
+
+        menu = QMenu(self)
+        action = menu.addAction(QIcon.fromTheme("list-remove"), "Remove replacement")
+        action.setStatusTip(
+            f'Restore original value in output and add to Redacted Words'
+        )
+
+        if menu.exec(self._mapping_table.viewport().mapToGlobal(pos)) != action:
+            return
+
+        # Restore original in output
+        output = self._output_edit.toPlainText()
+        self._output_edit.setPlainText(output.replace(replacement, original))
+
+        # Remove from mapping dict
+        if self._mapping is not None:
+            self._mapping.pop(replacement, None)
+
+        # Add original to Redacted Words so future runs catch it
+        self._add_to_redacted_words(original)
+
+        # Remove row (block signals to avoid spurious cellChanged)
+        self._mapping_table.blockSignals(True)
+        self._mapping_table.removeRow(row)
+        self._mapping_table.blockSignals(False)
+
+        n = self._mapping_table.rowCount()
+        if n == 0:
+            self._mapping_table.setVisible(False)
+            self._mapping_empty.setVisible(True)
+            self._mapping_sec.set_title("Mapping Table  (0 items)")
+            self._status_count.setText("")
+        else:
+            label = f"Mapping Table  ({n} item{'s' if n != 1 else ''})"
+            self._mapping_sec.set_title(label)
+            self._status_count.setText(f"{n} replacement{'s' if n != 1 else ''}")
+
+        preview = original[:40] + ("…" if len(original) > 40 else "")
+        self._status(f'Removed replacement for "{preview}", added to Redacted Words.')
 
     # ── Font scaling ───────────────────────────────────────────────────────────
 
