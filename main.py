@@ -1003,15 +1003,18 @@ class MainWindow(QMainWindow):
         if not cursor.hasSelection():
             return
         selected = cursor.selectedText()
-        tag = f"[REDACTED]"
+        if self._mapping is None:
+            self._mapping = {}
+        i = 1
+        while f”[REDACTED_{i}]” in self._mapping:
+            i += 1
+        tag = f”[REDACTED_{i}]”
         self._output_edit.setReadOnly(False)
         cursor.insertText(tag)
         self._output_edit.setReadOnly(True)
-        if self._mapping is None:
-            self._mapping = {}
         self._mapping[tag] = selected
         self._populate_mapping(self._mapping)
-        preview = selected[:40] + ("…" if len(selected) > 40 else "")
+        preview = selected[:40] + (“…” if len(selected) > 40 else “”)
         self._status(f'Manually redacted: “{preview}”')
 
     def _clear_all(self) -> None:
