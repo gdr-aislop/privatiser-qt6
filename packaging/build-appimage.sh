@@ -44,7 +44,11 @@ chmod +x appimagetool
 VERSION="${VERSION:-0.0.0}"
 APPIMAGE_NAME="Privatiser-${VERSION}-x86_64.AppImage"
 
+UPDATE_INFO="gh-releases-zsync|gdr-aislop|privatiser-qt6|latest|Privatiser-*-x86_64.AppImage.zsync"
+
 APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 \
-    ./appimagetool Privatiser.AppDir "${APPIMAGE_NAME}"
+    ./appimagetool -u "${UPDATE_INFO}" Privatiser.AppDir "${APPIMAGE_NAME}"
+
+zsyncmake "${APPIMAGE_NAME}"
 
 echo "Built: ${APPIMAGE_NAME}"
