@@ -1324,9 +1324,13 @@ def main() -> None:
     app.setApplicationName("Privatiser")
     app.setOrganizationName("Privatiser")
 
-    _icon = Path(__file__).parent / "docs" / "icon.png"
-    if _icon.exists():
-        app.setWindowIcon(QIcon(str(_icon)))
+    icon = QIcon.fromTheme("privatiser")
+    if icon.isNull():
+        _icon_path = Path(__file__).parent / "docs" / "icon.png"
+        if _icon_path.exists():
+            icon = QIcon(str(_icon_path))
+    if not icon.isNull():
+        app.setWindowIcon(icon)
 
     window = MainWindow()
     window.show()
