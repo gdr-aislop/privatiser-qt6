@@ -4,6 +4,7 @@
 import json
 import re
 import sys
+from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QSettings, Qt, pyqtSignal
@@ -471,6 +472,9 @@ class MainWindow(QMainWindow):
         self._settings = QSettings("Privatiser", "PrivatiserGUI")
 
         self.setWindowTitle("Privatiser")
+        _icon = Path(__file__).parent / "docs" / "icon.png"
+        if _icon.exists():
+            self.setWindowIcon(QIcon(str(_icon)))
         self.setMinimumSize(860, 580)
         self.resize(
             self._settings.value("window/width",  1100, int),
