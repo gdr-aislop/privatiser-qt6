@@ -276,6 +276,41 @@ DARK_STYLESHEET = """
         border-top: 1px solid #2a2a2a;
         font-size: 10pt;
     }
+    QWidget#paneHeader {
+        background-color: #222;
+        border-bottom: 1px solid #2e2e2e;
+    }
+    QLabel#paneLabel {
+        color: #666;
+        background: transparent;
+    }
+    QLabel#fieldLabel {
+        color: #888;
+    }
+    QLabel#hintLabel {
+        color: #555;
+    }
+    QLabel#emptyState {
+        color: #555;
+        padding: 16px;
+    }
+    QPushButton#headerBtn {
+        border: 1px solid #3a3a3a;
+        border-radius: 3px;
+        background: #2a2a2a;
+        color: #ccc;
+        padding: 2px 10px;
+    }
+    QPushButton#headerBtn:hover {
+        background: #3a3a3a;
+        color: #fff;
+    }
+    QPushButton#headerBtn:focus {
+        border: 2px solid #4fc3f7;
+    }
+    QPushButton#headerBtn:disabled {
+        color: #444;
+    }
 """
 
 
@@ -402,8 +437,7 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_ui()
         self._build_statusbar()
-        self._restore_settings()
-        self.setStyleSheet(DARK_STYLESHEET)
+        self._restore_settings()  # restores _dark_action.setChecked → triggers _apply_theme
 
     # ── Menu bar ───────────────────────────────────────────────────────────────
 
@@ -434,8 +468,10 @@ class MainWindow(QMainWindow):
         em.addSeparator()
         self._add_action(em, "Load &Sample Text",    "Ctrl+Shift+E", self._load_sample,
                          "Fill the input pane with sample sensitive text")
-        self._add_action(em, "C&lear All",           "Ctrl+L",       self._clear_all,
+        self._add_action(em, "C&lear All",           "",             self._clear_all,
                          "Clear both panes and the mapping table")
+        self._add_action(em, "Focus &Input",         "Ctrl+L",       self._focus_input,
+                         "Select all text in the input pane and focus it")
 
         # View
         vm = mb.addMenu("&View")
@@ -448,6 +484,12 @@ class MainWindow(QMainWindow):
         self._mapping_toggle.setShortcut(QKeySequence("Ctrl+T"))
         self._mapping_toggle.toggled.connect(lambda v: self._mapping_sec.setVisible(v))
         vm.addAction(self._mapping_toggle)
+
+        vm.addSeparator()
+        self._dark_action = QAction("&Dark Mode", self, checkable=True)
+        self._dark_action.setStatusTip("Switch between dark and system-native theme")
+        self._dark_action.toggled.connect(self._apply_theme)
+        vm.addAction(self._dark_action)
 
         vm.addSeparator()
         self._add_action(vm, "Increase Font Size", "Ctrl+=", self._increase_font)
@@ -598,12 +640,9 @@ class MainWindow(QMainWindow):
 
         clear_btn = QPushButton("Clear All")
         clear_btn.setProperty("class", "danger")
-        clear_btn.setToolTip("Clear input, output, and mapping  (Ctrl+L)")
+        clear_btn.setToolTip("Clear input, output, and mapping")
         clear_btn.setAccessibleName("Clear all")
-        clear_btn.setAccessibleDescription(
-            "Clear both text panes and the mapping table. "
-            "Keyboard shortcut: Ctrl+L"
-        )
+        clear_btn.setAccessibleDescription("Clear both text panes and the mapping table.")
         clear_btn.clicked.connect(self._clear_all)
 
         row.addStretch()
@@ -698,7 +737,7 @@ class MainWindow(QMainWindow):
             "No replacements yet — run Anonymize to populate this table."
         )
         self._mapping_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._mapping_empty.setStyleSheet("color: #555; padding: 16px;")
+        self._mapping_empty.setObjectName("emptyState")
         self._mapping_empty.setAccessibleName("Empty mapping table notice")
         bl.addWidget(self._mapping_empty)
 
@@ -923,6 +962,10 @@ class MainWindow(QMainWindow):
         self._input_edit.setPlainText(SAMPLE_TEXT)
         self._status("Sample text loaded.")
 
+    def _focus_input(self) -> None:
+        self._input_edit.setFocus()
+        self._input_edit.selectAll()
+
     def _add_to_custom_words(self, word: str) -> None:
         word = word.strip()
         if not word:
@@ -996,12 +1039,19 @@ class MainWindow(QMainWindow):
         self._custom_words_edit.setText(self._settings.value("custom_words", "", str))
         self._allowlist_edit.setText(self._settings.value("allowlist", "", str))
 
+        # Restore theme — blockSignals so we only call _apply_theme once at the end
+        self._dark_action.blockSignals(True)
+        self._dark_action.setChecked(self._settings.value("theme/dark", False, bool))
+        self._dark_action.blockSignals(False)
+        self._apply_theme()
+
     def _save_settings(self) -> None:
         self._settings.setValue("window/width",  self.width())
         self._settings.setValue("window/height", self.height())
         for key, cb in self._cat_checks.items():
             self._settings.setValue(f"cat/{key}", cb.isChecked())
-        self._settings.setValue("custom_words", self._custom_words_edit.text())
+        self._settings.setValue("theme/dark",    self._dark_action.isChecked())
+        self._settings.setValue("custom_words",  self._custom_words_edit.text())
         self._settings.setValue("allowlist",    self._allowlist_edit.text())
 
     def closeEvent(self, event) -> None:
@@ -1010,6 +1060,9 @@ class MainWindow(QMainWindow):
 
     # ── Misc ───────────────────────────────────────────────────────────────────
 
+    def _apply_theme(self) -> None:
+        self.setStyleSheet(DARK_STYLESHEET if self._dark_action.isChecked() else "")
+
     def _on_output_selection_changed(self) -> None:
         self._redact_sel_btn.setEnabled(
             self._output_edit.textCursor().hasSelection()
@@ -1017,8 +1070,8 @@ class MainWindow(QMainWindow):
 
     def _status(self, message: str, *, error: bool = False) -> None:
         self._status_msg.setText(message)
-        color = "#e07070" if error else "#777777"
-        self._status_msg.setStyleSheet(f"color: {color};")
+        # Red for errors is universal; clear to native for normal messages
+        self._status_msg.setStyleSheet("color: red;" if error else "")
 
     def _activate_licence(self) -> None:
         key = self._licence_edit.text().strip()
@@ -1046,7 +1099,6 @@ class MainWindow(QMainWindow):
     def _pane_frame() -> tuple[QFrame, QVBoxLayout]:
         frame = QFrame()
         frame.setFrameShape(QFrame.Shape.StyledPanel)
-        frame.setStyleSheet("QFrame { border: 1px solid #2e2e2e; border-radius: 4px; }")
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -1055,14 +1107,15 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _pane_header(label_text: str) -> tuple[QWidget, QHBoxLayout]:
         header = QWidget()
-        header.setStyleSheet("background-color: #222; border-bottom: 1px solid #2e2e2e;")
+        header.setObjectName("paneHeader")
         hl = QHBoxLayout(header)
         hl.setContentsMargins(10, 4, 8, 4)
         lbl = QLabel(label_text)
-        lbl.setStyleSheet(
-            "font-size: 9pt; font-weight: bold; color: #666; letter-spacing: 1px;"
-            "border: none; background: transparent;"
-        )
+        lbl.setObjectName("paneLabel")
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        lbl.setFont(font)
         lbl.setAccessibleName(f"{label_text} pane label")
         hl.addWidget(lbl)
         hl.addStretch()
@@ -1071,14 +1124,11 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _header_btn(label: str, tip: str = "") -> QPushButton:
         btn = QPushButton(label)
-        btn.setMinimumHeight(26)
-        btn.setStyleSheet(
-            "QPushButton { font-size: 9pt; padding: 2px 10px; min-height: 24px; "
-            "border: 1px solid #3a3a3a; border-radius: 3px; background: #2a2a2a; color: #ccc; }"
-            "QPushButton:hover { background: #3a3a3a; color: #fff; }"
-            "QPushButton:focus { border: 2px solid #4fc3f7; }"
-            "QPushButton:disabled { color: #444; }"
-        )
+        btn.setObjectName("headerBtn")
+        btn.setFlat(True)
+        font = QFont()
+        font.setPointSize(9)
+        btn.setFont(font)
         if tip:
             btn.setToolTip(tip)
         return btn
@@ -1087,22 +1137,26 @@ class MainWindow(QMainWindow):
     def _hline() -> QFrame:
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("color: #2e2e2e;")
+        line.setFrameShadow(QFrame.Shadow.Sunken)
         return line
 
     @staticmethod
     def _field_label(text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(
-            "font-size: 9pt; font-weight: bold; color: #888; text-transform: uppercase; "
-            "letter-spacing: 1px;"
-        )
+        lbl.setObjectName("fieldLabel")
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        lbl.setFont(font)
         return lbl
 
     @staticmethod
     def _hint(text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet("font-size: 9pt; color: #555;")
+        lbl.setObjectName("hintLabel")
+        font = QFont()
+        font.setPointSize(9)
+        lbl.setFont(font)
         return lbl
 
     @staticmethod
