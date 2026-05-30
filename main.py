@@ -1213,7 +1213,7 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         action = menu.addAction(QIcon.fromTheme("list-remove"), "Remove replacement")
         action.setStatusTip(
-            f'Restore original value in output and add to Redacted Words'
+            f'Restore original value in output and add to Whitelist'
         )
 
         if menu.exec(self._mapping_table.viewport().mapToGlobal(pos)) != action:
@@ -1227,8 +1227,8 @@ class MainWindow(QMainWindow):
         if self._mapping is not None:
             self._mapping.pop(replacement, None)
 
-        # Add original to Redacted Words so future runs catch it
-        self._add_to_redacted_words(original)
+        # Add original to Whitelist so future runs leave it untouched
+        self._add_to_whitelist(original)
 
         # Remove row (block signals to avoid spurious cellChanged)
         self._mapping_table.blockSignals(True)
@@ -1247,7 +1247,7 @@ class MainWindow(QMainWindow):
             self._status_count.setText(f"{n} replacement{'s' if n != 1 else ''}")
 
         preview = original[:40] + ("…" if len(original) > 40 else "")
-        self._status(f'Removed replacement for "{preview}", added to Redacted Words.')
+        self._status(f'Removed replacement for "{preview}", added to Whitelist.')
 
     # ── Font scaling ───────────────────────────────────────────────────────────
 
