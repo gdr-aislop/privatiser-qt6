@@ -29,48 +29,29 @@ jobs:
             echo "version=0.0.0~git${SHORT}" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── System dependencies ────────────────────────────────────────────────
-      # libxcb-cursor0 and libgl1 are runtime deps for Qt on Ubuntu 24.04;
-      # patchelf is needed by PyInstaller to rewrite rpath entries.
+      # ── System build tools only — no PyQt6 here, that's a runtime dep ─────
       - name: Install system build dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            python3-dev \
             python3-pip \
-            binutils \
-            patchelf \
-            libxcb-cursor0 \
-            libxcb1 \
-            libx11-6 \
-            libgl1
+            python3-venv
 
-      # ── Python dependencies ────────────────────────────────────────────────
-      - name: Install Python dependencies
+      # ── Vendor the privatiser library ──────────────────────────────────────
+      # PyQt6 is available as the system package python3-pyqt6 and is declared
+      # as a Depends, so we do NOT vendor it. Only privatiser (PyPI-only) needs
+      # to be shipped inside the .deb.
+      - name: Vendor privatiser into package tree
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+          pip install \
+            --target vendor \
+            --no-compile \
+            privatiser
 
-      # ── Bundle with PyInstaller ────────────────────────────────────────────
-      # --onedir produces a directory bundle (more reliable than --onefile
-      # for Qt apps because Qt's platform plugin loader expects relative paths).
-      # --collect-all PyQt6 ensures platform plugins and translations are
-      # included; without it the app silently fails to open a window.
-      - name: Build with PyInstaller
-        run: |
-          pyinstaller \
-            --name privatiser \
-            --onedir \
-            --windowed \
-            --collect-all PyQt6 \
-            main.py
-
-      # ── Sanity-check the binary before packaging ───────────────────────────
-      - name: Verify binary
-        run: |
-          test -f dist/privatiser/privatiser
-          file dist/privatiser/privatiser | grep -q "ELF 64-bit"
-          echo "Binary OK"
+          # Drop bytecode and dist-info cruft to keep the package lean
+          find vendor -name "*.pyc" -delete
+          find vendor -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+          find vendor -name "*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
 
       # ── Assemble .deb ──────────────────────────────────────────────────────
       - name: Assemble .deb
@@ -78,59 +59,67 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          PKG="privatiser_${VERSION}_amd64"
+          # Pure-Python package → architecture: all
+          PKG="privatiser_${VERSION}_all"
 
           install -d "${PKG}/DEBIAN"
-          install -d "${PKG}/usr/lib/privatiser"
+          install -d "${PKG}/usr/share/privatiser"
+          install -d "${PKG}/usr/share/privatiser/vendor"
           install -d "${PKG}/usr/bin"
           install -d "${PKG}/usr/share/applications"
           install -d "${PKG}/usr/share/doc/privatiser"
 
-          # PyInstaller bundle
-          cp -r dist/privatiser/. "${PKG}/usr/lib/privatiser/"
+          # Application source
+          install -m 644 main.py "${PKG}/usr/share/privatiser/"
 
-          # Thin launcher so `privatiser` is on $PATH
+          # Vendored privatiser library (only this; PyQt6 comes from the system)
+          cp -r vendor/. "${PKG}/usr/share/privatiser/vendor/"
+
+          # Launcher — prepend vendor dir so privatiser is importable,
+          # then hand off to the system python3 and system PyQt6
           cat > "${PKG}/usr/bin/privatiser" <<'LAUNCHER'
-          #!/bin/sh
-          exec /usr/lib/privatiser/privatiser "$@"
-          LAUNCHER
+#!/bin/sh
+PYTHONPATH=/usr/share/privatiser/vendor${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH
+exec python3 /usr/share/privatiser/main.py "$@"
+LAUNCHER
           chmod 755 "${PKG}/usr/bin/privatiser"
 
           # .desktop entry for application menus
           cat > "${PKG}/usr/share/applications/privatiser.desktop" <<'DESKTOP'
-          [Desktop Entry]
-          Name=Privatiser
-          Comment=Anonymize sensitive data in text — runs fully locally
-          Exec=/usr/lib/privatiser/privatiser
-          Icon=privatiser
-          Type=Application
-          Categories=Utility;Security;
-          Terminal=false
-          StartupWMClass=privatiser
-          DESKTOP
+[Desktop Entry]
+Name=Privatiser
+Comment=Anonymize sensitive data in text — runs fully locally
+Exec=privatiser
+Icon=privatiser
+Type=Application
+Categories=Utility;Security;
+Terminal=false
+StartupWMClass=privatiser
+DESKTOP
 
           # Minimal copyright notice required by Debian policy
           cat > "${PKG}/usr/share/doc/privatiser/copyright" <<'CR'
-          Privatiser desktop GUI
-          MIT License — see https://privatiser.net
-          CR
+Privatiser desktop GUI
+MIT License — see https://privatiser.net
+CR
 
-          # control file — Installed-Size must be in kibibytes
+          # control — Installed-Size in kibibytes; arch:all; system deps only
           INSTALLED_SIZE=$(du -sk "${PKG}/usr" | cut -f1)
           cat > "${PKG}/DEBIAN/control" <<EOF
-          Package: privatiser
-          Version: ${VERSION}
-          Architecture: amd64
-          Maintainer: Privatiser <info@privatiser.net>
-          Installed-Size: ${INSTALLED_SIZE}
-          Depends: libxcb-cursor0, libgl1
-          Section: utils
-          Priority: optional
-          Description: Privatiser — text anonymization desktop GUI
-           Anonymizes IPs, API keys, secrets, PII, and cloud identifiers
-           from any text. Fully reversible. Everything runs locally —
-           nothing leaves the machine.
-          EOF
+Package: privatiser
+Version: ${VERSION}
+Architecture: all
+Maintainer: Privatiser <info@privatiser.net>
+Installed-Size: ${INSTALLED_SIZE}
+Depends: python3 (>= 3.10), python3-pyqt6
+Section: utils
+Priority: optional
+Description: Privatiser — text anonymization desktop GUI
+ Anonymizes IPs, API keys, secrets, PII, and cloud identifiers
+ from any text. Fully reversible. Everything runs locally —
+ nothing leaves the machine.
+EOF
 
           dpkg-deb --build --root-owner-group "${PKG}"
           echo "deb=${PKG}.deb" >> "$GITHUB_OUTPUT"
@@ -138,6 +127,22 @@ jobs:
       # ── Verify the .deb is well-formed ─────────────────────────────────────
       - name: Inspect .deb
         run: dpkg-deb --info "${{ steps.deb.outputs.deb }}"
+
+      # ── Smoke-test: install the .deb and check the launcher is present ─────
+      - name: Install and smoke-test .deb
+        run: |
+          sudo apt-get install -y python3-pyqt6
+          sudo dpkg -i "${{ steps.deb.outputs.deb }}"
+          test -x /usr/bin/privatiser
+          python3 -c "
+          import sys
+          sys.path.insert(0, '/usr/share/privatiser/vendor')
+          from privatiser import Privatiser
+          p = Privatiser()
+          result, mapping = p.anonymize('ip=192.168.1.1 pass=secret')
+          assert mapping, 'Expected replacements, got none'
+          print('Smoke test OK —', len(mapping), 'replacements')
+          "
 
       # ── Upload artifact ────────────────────────────────────────────────────
       - name: Upload .deb artifact
