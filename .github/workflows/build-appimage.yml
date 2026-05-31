@@ -46,9 +46,10 @@ jobs:
       # ── Python deps in a venv ──────────────────────────────────────────────
       - name: Install Python packages
         run: |
+          python3 --version
           python3 -m venv /opt/build-venv
-          /opt/build-venv/bin/pip install --quiet --upgrade pip
-          /opt/build-venv/bin/pip install --quiet PyQt6 privatiser pyinstaller
+          /opt/build-venv/bin/pip install --upgrade pip
+          /opt/build-venv/bin/pip install PyQt6 privatiser pyinstaller
 
       # ── Build ──────────────────────────────────────────────────────────────
       - name: Build AppImage
