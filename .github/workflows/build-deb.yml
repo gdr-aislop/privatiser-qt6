@@ -1,0 +1,153 @@
+name: Build .deb package
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Derive a sensible package version ─────────────────────────────────
+      - name: Set version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            SHORT=$(git rev-parse --short HEAD)
+            echo "version=0.0.0~git${SHORT}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── System build tools only — PyQt6 is a runtime dep, not needed here ─
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            python3-pip \
+            python3-venv
+
+      # ── Vendor the privatiser library ──────────────────────────────────────
+      # PyQt6 ships as python3-pyqt6 in Ubuntu 24.04 and is declared as a
+      # Depends, so we do NOT vendor it.  Only privatiser (PyPI-only) is
+      # bundled inside the .deb.
+      - name: Vendor privatiser into package tree
+        run: |
+          pip install \
+            --target vendor \
+            --no-compile \
+            privatiser
+          find vendor -name "*.pyc"         -delete
+          find vendor -name "__pycache__"   -type d -exec rm -rf {} + 2>/dev/null || true
+          find vendor -name "*.dist-info"   -type d -exec rm -rf {} + 2>/dev/null || true
+
+      # ── Assemble .deb ──────────────────────────────────────────────────────
+      - name: Assemble .deb
+        id: deb
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          PKG="privatiser_${VERSION}_all"
+
+          install -d "${PKG}/DEBIAN"
+          install -d "${PKG}/usr/share/privatiser/vendor"
+          install -d "${PKG}/usr/bin"
+          install -d "${PKG}/usr/share/applications"
+          install -d "${PKG}/usr/share/doc/privatiser"
+          install -d "${PKG}/usr/share/icons/hicolor/256x256/apps"
+
+          # Application source and vendored library
+          install -m 644 main.py             "${PKG}/usr/share/privatiser/"
+          cp -r vendor/.                     "${PKG}/usr/share/privatiser/vendor/"
+
+          install -m 644 docs/icon.png \
+            "${PKG}/usr/share/icons/hicolor/256x256/apps/privatiser.png"
+
+          # Launcher and .desktop come from packaging/ in the repo,
+          # avoiding heredocs with column-0 body lines that break YAML.
+          install -m 755 packaging/launcher  "${PKG}/usr/bin/privatiser"
+          install -m 644 packaging/privatiser.desktop \
+            "${PKG}/usr/share/applications/privatiser.desktop"
+
+          # Copyright (Debian policy requires this file)
+          printf 'Privatiser desktop GUI\nMIT License — see https://privatiser.net\n' \
+            > "${PKG}/usr/share/doc/privatiser/copyright"
+
+          # control file — generated with Python so variable substitution
+          # stays within the YAML block indentation (no column-0 content)
+          export INSTALLED_SIZE=$(du -sk "${PKG}/usr" | cut -f1)
+          python3 -c "
+          import os, pathlib, textwrap
+          v = os.environ['VERSION']
+          s = os.environ['INSTALLED_SIZE']
+          control = textwrap.dedent(f'''
+              Package: privatiser
+              Version: {v}
+              Architecture: all
+              Maintainer: Privatiser <info@privatiser.net>
+              Installed-Size: {s}
+              Depends: python3 (>= 3.10), python3-pyqt6
+              Section: utils
+              Priority: optional
+              Description: Privatiser — text anonymization desktop GUI
+               Anonymizes IPs, API keys, secrets, PII, and cloud identifiers
+               from any text. Fully reversible. Everything runs locally —
+               nothing leaves the machine.
+          ''').lstrip()
+          pathlib.Path('${PKG}/DEBIAN/control').write_text(control)
+          "
+
+          dpkg-deb --build --root-owner-group "${PKG}"
+          echo "deb=${PKG}.deb" >> "$GITHUB_OUTPUT"
+
+      # ── Verify the .deb is well-formed ─────────────────────────────────────
+      - name: Inspect .deb
+        run: dpkg-deb --info "${{ steps.deb.outputs.deb }}"
+
+      # ── Smoke-test: install the .deb and exercise the library ──────────────
+      - name: Install and smoke-test .deb
+        run: |
+          sudo apt-get install -y python3-pyqt6
+          sudo dpkg -i "${{ steps.deb.outputs.deb }}"
+          test -x /usr/bin/privatiser
+          python3 -c "
+          import sys
+          sys.path.insert(0, '/usr/share/privatiser/vendor')
+          from privatiser import Privatiser
+          p = Privatiser()
+          result, mapping = p.anonymize('ip=192.168.1.1 pass=secret')
+          assert mapping, 'Expected replacements, got none'
+          print('Smoke test OK —', len(mapping), 'replacements')
+          "
+
+      # ── Upload artifact ────────────────────────────────────────────────────
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: privatiser-deb-ubuntu2404
+          path: "*.deb"
+          if-no-files-found: error
+          retention-days: 30
+
+      # ── Create GitHub Release on version tags ──────────────────────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.deb"
+          generate_release_notes: true

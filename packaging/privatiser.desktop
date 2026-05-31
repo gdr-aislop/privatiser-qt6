@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Privatiser
+Comment=Anonymize sensitive data in text — runs fully locally
+Exec=privatiser
+Icon=privatiser
+Type=Application
+Categories=Utility;Security;
+Terminal=false
+StartupWMClass=privatiser
