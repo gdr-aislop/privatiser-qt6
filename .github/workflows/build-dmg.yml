@@ -41,13 +41,22 @@ jobs:
           /opt/build-venv/bin/pip install --quiet --upgrade pip
           /opt/build-venv/bin/pip install --quiet PyQt6 privatiser pyinstaller
 
+      # ── Sanity check ────────────────────────────────────────────────────────
+      - name: Pre-build sanity check
+        run: |
+          python3 --version
+          /opt/build-venv/bin/python3 --version
+          /opt/build-venv/bin/pyinstaller --version
+          ls docs/icon.png
+          sw_vers
+
       # ── Build ───────────────────────────────────────────────────────────────
       - name: Build DMG
         env:
           VERSION: ${{ steps.version.outputs.version }}
           PY: /opt/build-venv/bin/python3
           PYINSTALLER: /opt/build-venv/bin/pyinstaller
-        run: bash packaging/build-dmg.sh
+        run: bash -x packaging/build-dmg.sh 2>&1
 
       # ── Verify ─────────────────────────────────────────────────────────────
       - name: Verify DMG exists
