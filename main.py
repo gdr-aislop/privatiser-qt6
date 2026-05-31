@@ -1022,15 +1022,12 @@ class MainWindow(QMainWindow):
 
         row.addStretch()
         row.addWidget(self._anon_btn)
-        row.addSpacing(1)
         row.addWidget(anon_copy_btn)
-        row.addSpacing(12)
+        row.addSpacing(24)
         row.addWidget(paste_deanon_btn)
-        row.addSpacing(1)
         row.addWidget(self._deanon_btn)
-        row.addSpacing(1)
         row.addWidget(deanon_copy_btn)
-        row.addSpacing(12)
+        row.addSpacing(24)
         row.addWidget(clear_btn)
         row.addStretch()
         return row
