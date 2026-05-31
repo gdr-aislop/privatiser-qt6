@@ -10,6 +10,21 @@ Something slipped? Right-click any selection in the input pane to add it to Reda
 
 ## Running from source
 
+### macOS
+
+```bash
+brew install python-tk  # or any Python 3.10+
+
+git clone https://github.com/gdr-aislop/privatiser-qt6.git
+cd privatiser-qt6
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install PyQt6 privatiser
+
+python3 main.py
+```
+
 ### Ubuntu 24.04+
 
 ```bash
@@ -44,11 +59,17 @@ python3 main.py
 
 ## Pre-built packages
 
-Both a `.deb` (Ubuntu 24.04) and a cross-distro AppImage are built automatically by CI.
+A `.deb` (Ubuntu 24.04), cross-distro AppImage, and macOS DMG are built automatically by CI.
 
-**Tagged releases** — [GitHub Releases](https://github.com/gdr-aislop/privatiser-qt6/releases) — pick the `.deb` or `.AppImage` from the release assets.
+**Tagged releases** — [GitHub Releases](https://github.com/gdr-aislop/privatiser-qt6/releases) — pick the package for your platform from the release assets.
 
-**Every commit** — [GitHub Actions](https://github.com/gdr-aislop/privatiser-qt6/actions) → latest run → *privatiser-deb-ubuntu2404* or *privatiser-appimage* artifact (kept for 30 days).
+**Every commit** — [GitHub Actions](https://github.com/gdr-aislop/privatiser-qt6/actions) → latest run → *privatiser-deb-ubuntu2404*, *privatiser-appimage*, or *privatiser-dmg-macos* artifact (kept for 30 days).
+
+### macOS DMG
+
+Download `Privatiser-*-macOS.dmg`, open it, and drag **Privatiser** to your Applications folder.
+
+> **Note:** The app is not code-signed. On first launch, right-click the app and choose **Open** to bypass Gatekeeper, then confirm in the dialog.
 
 ### .deb (Ubuntu 24.04)
 

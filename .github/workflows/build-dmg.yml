@@ -1,0 +1,71 @@
+name: Build macOS DMG
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Derive version ──────────────────────────────────────────────────────
+      - name: Set version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            SHORT=$(git rev-parse --short HEAD)
+            echo "version=0.0.0~git${SHORT}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Python deps in a venv ───────────────────────────────────────────────
+      - name: Install Python packages
+        run: |
+          python3 -m venv /opt/build-venv
+          /opt/build-venv/bin/pip install --quiet --upgrade pip
+          /opt/build-venv/bin/pip install --quiet PyQt6 privatiser pyinstaller
+
+      # ── Build ───────────────────────────────────────────────────────────────
+      - name: Build DMG
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PY: /opt/build-venv/bin/python3
+          PYINSTALLER: /opt/build-venv/bin/pyinstaller
+        run: bash packaging/build-dmg.sh
+
+      # ── Verify ─────────────────────────────────────────────────────────────
+      - name: Verify DMG exists
+        run: ls -lh Privatiser-*.dmg
+
+      # ── Upload artifact ─────────────────────────────────────────────────────
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: privatiser-dmg-macos
+          path: Privatiser-*.dmg
+          if-no-files-found: error
+          retention-days: 30
+
+      # ── Publish to GitHub Release on version tags ───────────────────────────
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Privatiser-*.dmg
+          generate_release_notes: false
