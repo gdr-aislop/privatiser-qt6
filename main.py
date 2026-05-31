@@ -1009,19 +1009,28 @@ class MainWindow(QMainWindow):
         )
         self._deanon_btn.setAccessibleName("Deanonymize")
 
+        deanon_copy_btn = _companion_btn(
+            "&& Copy", "Ctrl+D",
+            "Paste clipboard, deanonymize, then copy the result to the clipboard",
+            self._paste_deanon_and_copy,
+        )
+        deanon_copy_btn.setAccessibleName("Paste, deanonymize and copy")
+
         clear_btn = _main_btn("Clear All", "", "Clear input, output, and mapping", self._clear_all)
         clear_btn.setProperty("class", "danger")
         clear_btn.setAccessibleName("Clear all")
 
         row.addStretch()
         row.addWidget(self._anon_btn)
-        row.addSpacing(2)
+        row.addSpacing(1)
         row.addWidget(anon_copy_btn)
-        row.addSpacing(24)
+        row.addSpacing(12)
         row.addWidget(paste_deanon_btn)
-        row.addSpacing(2)
+        row.addSpacing(1)
         row.addWidget(self._deanon_btn)
-        row.addSpacing(24)
+        row.addSpacing(1)
+        row.addWidget(deanon_copy_btn)
+        row.addSpacing(12)
         row.addWidget(clear_btn)
         row.addStretch()
         return row
@@ -1283,6 +1292,28 @@ class MainWindow(QMainWindow):
             return
         self._input_edit.setPlainText(result)
         self._status("Pasted and deanonymized — original text restored to input pane.")
+
+    def _paste_deanon_and_copy(self) -> None:
+        text = QApplication.clipboard().text()
+        if not text:
+            self._status("Clipboard is empty.", error=True)
+            return
+        if not self._mapping:
+            self._status(
+                "No mapping available. Run Anonymize first, or load a mapping via "
+                "File → Load Mapping…",
+                error=True,
+            )
+            return
+        self._output_edit.setPlainText(text)
+        try:
+            result = self._make_privatiser().deanonymize(text, self._mapping)
+        except Exception as exc:
+            self._status(f"Deanonymization failed: {exc}", error=True)
+            return
+        self._input_edit.setPlainText(result)
+        QApplication.clipboard().setText(result)
+        self._status("Pasted, deanonymized, and copied to clipboard.")
 
     def _redact_selection(self) -> None:
         cursor = self._output_edit.textCursor()
