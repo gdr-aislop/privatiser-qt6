@@ -1258,14 +1258,11 @@ class MainWindow(QMainWindow):
         replacement = replacement_item.data(Qt.ItemDataRole.UserRole) or replacement_item.text()
 
         menu = QMenu(self)
-        action = menu.addAction(QIcon.fromTheme("list-remove"), "Remove replacement")
-        action.setStatusTip(
-            f'Restore original value in output and add to Whitelist'
-        )
+        remove_action = menu.addAction(QIcon.fromTheme("list-remove"), "Remove replacement")
+        whitelist_action = menu.addAction(QIcon.fromTheme("list-remove"), "Remove replacement and add to Whitelist")
 
-        is_custom = original in self._custom_replacements
-
-        if menu.exec(self._mapping_table.viewport().mapToGlobal(pos)) != action:
+        chosen = menu.exec(self._mapping_table.viewport().mapToGlobal(pos))
+        if chosen not in (remove_action, whitelist_action):
             return
 
         # Restore original in output
@@ -1277,8 +1274,7 @@ class MainWindow(QMainWindow):
             self._mapping.pop(replacement, None)
         self._custom_replacements.pop(original, None)
 
-        # Only whitelist auto-generated entries; custom ones the user wanted redacted
-        if not is_custom:
+        if chosen is whitelist_action:
             self._add_to_whitelist(original)
 
         # Remove row (block signals to avoid spurious cellChanged)
@@ -1298,7 +1294,10 @@ class MainWindow(QMainWindow):
             self._status_count.setText(f"{n} replacement{'s' if n != 1 else ''}")
 
         preview = original[:40] + ("…" if len(original) > 40 else "")
-        self._status(f'Removed replacement for "{preview}", added to Whitelist.')
+        if chosen is whitelist_action:
+            self._status(f'Removed replacement for "{preview}", added to Whitelist.')
+        else:
+            self._status(f'Removed replacement for "{preview}".')
 
     # ── Font scaling ───────────────────────────────────────────────────────────
 
