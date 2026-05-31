@@ -4,7 +4,7 @@ Desktop GUI for anonymizing sensitive text — replaces IPs, API keys, secrets, 
 
 ![Privatiser main window](docs/screenshot.png)
 
-Something slipped? Right-click any selection in the input pane to add it to Custom Words instantly:
+Something slipped? Right-click any selection in the input pane to add it to Redacted Words instantly:
 
 ![Context menu](docs/screenshot-contextmenu.png)
 
