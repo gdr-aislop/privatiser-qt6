@@ -63,7 +63,13 @@ A `.deb` (Ubuntu 24.04), cross-distro AppImage, and macOS DMG are built automati
 
 **Tagged releases** — [GitHub Releases](https://github.com/gdr-aislop/privatiser-qt6/releases) — pick the package for your platform from the release assets.
 
-**Every commit** — [GitHub Actions](https://github.com/gdr-aislop/privatiser-qt6/actions) → latest run → *privatiser-deb-ubuntu2404*, *privatiser-appimage*, or *privatiser-dmg-macos* artifact (kept for 30 days).
+**Every commit** — [GitHub Actions](https://github.com/gdr-aislop/privatiser-qt6/actions) → latest run → *privatiser-deb-ubuntu2404*, *privatiser-appimage*, *privatiser-dmg-macos*, or *privatiser-windows-exe* artifact (kept for 30 days).
+
+### Windows EXE
+
+Download `Privatiser-*-windows.exe` and double-click to run — no installation needed.
+
+> **Note:** The exe is not code-signed. Windows SmartScreen will warn on first launch; click **More info → Run anyway** to proceed.
 
 ### macOS DMG
 
