@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QSettings, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QBrush, QColor, QFont, QIcon, QKeySequence
+from PyQt6.QtGui import QAction, QBrush, QColor, QFont, QIcon, QKeySequence, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -329,7 +329,215 @@ DARK_STYLESHEET = """
     QPushButton#headerBtn:disabled {
         color: #444;
     }
+    QWidget#findBar {
+        background-color: #1a1a1a;
+        border-bottom: 1px solid #2e2e2e;
+    }
+    QPushButton#findBarBtn {
+        background-color: transparent;
+        border: 1px solid #3a3a3a;
+        border-radius: 3px;
+        min-height: 0;
+        padding: 1px;
+    }
+    QPushButton#findBarBtn:hover {
+        background-color: #2a2a2a;
+    }
+    QPushButton#findBarBtn:focus {
+        border: 1px solid #4fc3f7;
+    }
+    QLabel#findCount {
+        color: #666;
+        font-size: 9pt;
+        padding: 0 4px;
+    }
+    QPushButton#sectionFindBtn {
+        background-color: #222;
+        color: #bbbbbb;
+        border: none;
+        border-bottom: 1px solid #333;
+        border-left: 1px solid #2a2a2a;
+        min-height: 36px;
+        padding: 0 8px;
+    }
+    QPushButton#sectionFindBtn:hover {
+        background-color: #2a2a2a;
+    }
+    QPushButton#sectionFindBtn:focus {
+        border: 1px solid #4fc3f7;
+    }
 """
+
+
+# ── Find bar ───────────────────────────────────────────────────────────────────
+
+class _FindLineEdit(QLineEdit):
+    escape_pressed = pyqtSignal()
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.escape_pressed.emit()
+        else:
+            super().keyPressEvent(event)
+
+
+class FindBar(QWidget):
+    """Inline search strip. Attach to a QTextEdit (highlights + navigates) or
+    QTableWidget (filters rows). Hidden by default; call activate() to show."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("findBar")
+        self._text_edit = None
+        self._table = None
+        self._cursors: list = []
+        self._idx = -1
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(6, 2, 6, 2)
+        lay.setSpacing(4)
+
+        self._input = _FindLineEdit()
+        self._input.setPlaceholderText("Find…")
+        self._input.textChanged.connect(self._search)
+        self._input.returnPressed.connect(self.next_match)
+        self._input.escape_pressed.connect(self.close_bar)
+        lay.addWidget(self._input, stretch=1)
+
+        self._prev_btn = self._mk_btn("go-up",       "Previous match")
+        self._next_btn = self._mk_btn("go-down",      "Next match  (Enter)")
+        self._close_btn = self._mk_btn("window-close", "Close  (Esc)")
+        self._prev_btn.clicked.connect(self.prev_match)
+        self._next_btn.clicked.connect(self.next_match)
+        self._close_btn.clicked.connect(self.close_bar)
+        lay.addWidget(self._prev_btn)
+        lay.addWidget(self._next_btn)
+
+        self._count = QLabel("")
+        self._count.setObjectName("findCount")
+        lay.addWidget(self._count)
+        lay.addWidget(self._close_btn)
+
+        self.setVisible(False)
+
+    @staticmethod
+    def _mk_btn(theme_icon: str, tip: str) -> QPushButton:
+        btn = QPushButton()
+        btn.setObjectName("findBarBtn")
+        btn.setIcon(QIcon.fromTheme(theme_icon))
+        btn.setFixedSize(22, 22)
+        btn.setFlat(True)
+        btn.setToolTip(tip)
+        return btn
+
+    def set_text_edit(self, te) -> None:
+        self._text_edit = te
+        self._table = None
+        self._prev_btn.setVisible(True)
+        self._next_btn.setVisible(True)
+
+    def set_table(self, table) -> None:
+        self._table = table
+        self._text_edit = None
+        self._prev_btn.setVisible(False)
+        self._next_btn.setVisible(False)
+
+    def activate(self) -> None:
+        self.setVisible(True)
+        self._input.setFocus()
+        self._input.selectAll()
+        self._search(self._input.text())
+
+    def close_bar(self) -> None:
+        self.setVisible(False)
+        self._clear()
+        target = self._text_edit or self._table
+        if target:
+            target.setFocus()
+
+    def _clear(self) -> None:
+        self._cursors = []
+        self._idx = -1
+        self._count.setText("")
+        if self._text_edit:
+            self._text_edit.setExtraSelections([])
+        elif self._table:
+            for r in range(self._table.rowCount()):
+                self._table.setRowHidden(r, False)
+
+    def _search(self, query: str) -> None:
+        self._clear()
+        if not query:
+            return
+        if self._text_edit:
+            self._search_text(query)
+        elif self._table:
+            self._search_table(query)
+
+    def _search_text(self, query: str) -> None:
+        doc = self._text_edit.document()
+        cur = QTextCursor(doc)
+        while True:
+            cur = doc.find(query, cur)
+            if cur.isNull():
+                break
+            self._cursors.append(QTextCursor(cur))
+        if not self._cursors:
+            self._count.setText("No matches")
+            return
+        self._idx = 0
+        self._highlight()
+        self._scroll()
+
+    def _search_table(self, query: str) -> None:
+        q = query.lower()
+        hits = 0
+        for r in range(self._table.rowCount()):
+            match = any(
+                (item := self._table.item(r, c)) and q in item.text().lower()
+                for c in range(self._table.columnCount())
+            )
+            self._table.setRowHidden(r, not match)
+            if match:
+                hits += 1
+        self._count.setText(
+            f"{hits} row{'s' if hits != 1 else ''}" if hits else "No matches"
+        )
+
+    def _highlight(self) -> None:
+        other_fmt = QTextCharFormat()
+        other_fmt.setBackground(QColor("#4a3800"))
+        cur_fmt = QTextCharFormat()
+        cur_fmt.setBackground(QColor("#c8860a"))
+        cur_fmt.setForeground(QColor("#000000"))
+
+        sels = []
+        for i, c in enumerate(self._cursors):
+            sel = QTextEdit.ExtraSelection()
+            sel.cursor = c
+            sel.format = cur_fmt if i == self._idx else other_fmt
+            sels.append(sel)
+        self._text_edit.setExtraSelections(sels)
+        self._count.setText(f"{self._idx + 1}/{len(self._cursors)}")
+
+    def _scroll(self) -> None:
+        if 0 <= self._idx < len(self._cursors):
+            self._text_edit.setTextCursor(self._cursors[self._idx])
+            self._text_edit.ensureCursorVisible()
+
+    def next_match(self) -> None:
+        if not self._cursors:
+            return
+        self._idx = (self._idx + 1) % len(self._cursors)
+        self._highlight()
+        self._scroll()
+
+    def prev_match(self) -> None:
+        if not self._cursors:
+            return
+        self._idx = (self._idx - 1) % len(self._cursors)
+        self._highlight()
+        self._scroll()
 
 
 # ── Collapsible section widget ─────────────────────────────────────────────────
@@ -348,13 +556,19 @@ class CollapsibleSection(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        _header = QWidget()
+        self._header_layout = QHBoxLayout(_header)
+        self._header_layout.setContentsMargins(0, 0, 0, 0)
+        self._header_layout.setSpacing(0)
+
         self._toggle = QToolButton()
         self._toggle.setCheckable(True)
         self._toggle.setChecked(True)
         self._toggle.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._toggle.toggled.connect(self._on_toggled)
         self._update_toggle_text()
-        root.addWidget(self._toggle)
+        self._header_layout.addWidget(self._toggle)
+        root.addWidget(_header)
 
         self._body = QWidget()
         body_layout = QVBoxLayout(self._body)
@@ -387,6 +601,9 @@ class CollapsibleSection(QWidget):
 
     def set_expanded(self, expanded: bool) -> None:
         self._toggle.setChecked(expanded)
+
+    def add_header_widget(self, widget: QWidget) -> None:
+        self._header_layout.addWidget(widget)
 
 
 # ── Drop-aware input editor ────────────────────────────────────────────────────
@@ -544,6 +761,10 @@ class MainWindow(QMainWindow):
                          style.standardIcon(SI.SP_TrashIcon))
         self._add_action(em, "Focus &Input",         "Ctrl+L",       self._focus_input,
                          "Select all text in the input pane and focus it")
+        em.addSeparator()
+        self._add_action(em, "&Find",                "Ctrl+F",       self._show_find,
+                         "Find text in the focused pane or table",
+                         icon=QIcon.fromTheme("edit-find"))
 
         # View — use set_expanded so the header toggle button stays visible when
         # the section is collapsed; sync the action back when the user clicks the
@@ -639,6 +860,8 @@ class MainWindow(QMainWindow):
     def _build_input_pane(self) -> QFrame:
         frame, layout = self._pane_frame()
 
+        self._input_find_bar = FindBar()
+
         header, hl = self._pane_header("INPUT")
         for label, tip, slot in [
             ("Open File…", "Open a file  (Ctrl+O)",       self._open_file),
@@ -648,8 +871,12 @@ class MainWindow(QMainWindow):
             btn = self._header_btn(label, tip)
             btn.clicked.connect(slot)
             hl.addWidget(btn)
+        find_btn = self._icon_header_btn("edit-find", "Find  (Ctrl+F)")
+        find_btn.clicked.connect(self._input_find_bar.activate)
+        hl.addWidget(find_btn)
         layout.addWidget(header)
         layout.addWidget(self._hline())
+        layout.addWidget(self._input_find_bar)
 
         self._input_edit = DropTextEdit()
         self._input_edit.setTabChangesFocus(True)
@@ -665,11 +892,14 @@ class MainWindow(QMainWindow):
         )
         self._input_edit.word_selected.connect(self._add_to_redacted_words)
         self._input_edit.whitelist_requested.connect(self._add_to_whitelist)
+        self._input_find_bar.set_text_edit(self._input_edit)
         layout.addWidget(self._input_edit)
         return frame
 
     def _build_output_pane(self) -> QFrame:
         frame, layout = self._pane_frame()
+
+        self._output_find_bar = FindBar()
 
         header, hl = self._pane_header("OUTPUT")
 
@@ -690,9 +920,13 @@ class MainWindow(QMainWindow):
             btn = self._header_btn(label, tip)
             btn.clicked.connect(slot)
             hl.addWidget(btn)
+        find_btn = self._icon_header_btn("edit-find", "Find  (Ctrl+F)")
+        find_btn.clicked.connect(self._output_find_bar.activate)
+        hl.addWidget(find_btn)
 
         layout.addWidget(header)
         layout.addWidget(self._hline())
+        layout.addWidget(self._output_find_bar)
 
         self._output_edit = OutputTextEdit()
         self._output_edit.setTabChangesFocus(True)
@@ -706,6 +940,7 @@ class MainWindow(QMainWindow):
         self._output_edit.word_selected.connect(self._add_to_redacted_words)
         self._output_edit.whitelist_requested.connect(self._add_to_whitelist)
         self._output_edit.redact_requested.connect(self._redact_selection)
+        self._output_find_bar.set_text_edit(self._output_edit)
         layout.addWidget(self._output_edit)
         return frame
 
@@ -845,7 +1080,18 @@ class MainWindow(QMainWindow):
 
     def _build_mapping_section(self) -> CollapsibleSection:
         sec = CollapsibleSection("Mapping Table  (0 items)")
+
+        find_btn = QPushButton()
+        find_btn.setObjectName("sectionFindBtn")
+        find_btn.setIcon(QIcon.fromTheme("edit-find"))
+        find_btn.setFixedWidth(38)
+        find_btn.setToolTip("Find in table  (Ctrl+F)")
+        sec.add_header_widget(find_btn)
+
         bl = sec.body_layout()
+
+        self._mapping_find_bar = FindBar()
+        bl.addWidget(self._mapping_find_bar)
 
         self._mapping_empty = QLabel(
             "No replacements yet — run Anonymize to populate this table."
@@ -878,7 +1124,25 @@ class MainWindow(QMainWindow):
         self._mapping_table.setVisible(False)
         bl.addWidget(self._mapping_table)
 
+        self._mapping_find_bar.set_table(self._mapping_table)
+        find_btn.clicked.connect(self._mapping_find_bar.activate)
+
         return sec
+
+    def _show_find(self) -> None:
+        focused = QApplication.focusWidget()
+        if focused is self._input_edit:
+            self._input_find_bar.activate()
+        elif focused is self._output_edit:
+            self._output_find_bar.activate()
+        elif focused is self._mapping_table:
+            self._mapping_find_bar.activate()
+        else:
+            for bar in (self._input_find_bar, self._output_find_bar, self._mapping_find_bar):
+                if bar.isVisible():
+                    bar.activate()
+                    return
+            self._input_find_bar.activate()
 
     # ── Status bar ─────────────────────────────────────────────────────────────
 
@@ -1426,6 +1690,16 @@ class MainWindow(QMainWindow):
         btn.setFont(font)
         if tip:
             btn.setToolTip(tip)
+        return btn
+
+    @staticmethod
+    def _icon_header_btn(theme_icon: str, tip: str) -> QPushButton:
+        btn = QPushButton()
+        btn.setObjectName("headerBtn")
+        btn.setIcon(QIcon.fromTheme(theme_icon))
+        btn.setFixedSize(28, 28)
+        btn.setFlat(True)
+        btn.setToolTip(tip)
         return btn
 
     @staticmethod
