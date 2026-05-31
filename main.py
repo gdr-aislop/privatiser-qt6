@@ -442,6 +442,12 @@ class FindBar(QWidget):
         self._prev_btn.setVisible(False)
         self._next_btn.setVisible(False)
 
+    def toggle(self) -> None:
+        if self.isVisible():
+            self.close_bar()
+        else:
+            self.activate()
+
     def activate(self) -> None:
         self.setVisible(True)
         self._input.setFocus()
@@ -872,7 +878,7 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(slot)
             hl.addWidget(btn)
         find_btn = self._icon_header_btn("edit-find", "Find  (Ctrl+F)")
-        find_btn.clicked.connect(self._input_find_bar.activate)
+        find_btn.clicked.connect(self._input_find_bar.toggle)
         hl.addWidget(find_btn)
         layout.addWidget(header)
         layout.addWidget(self._hline())
@@ -921,7 +927,7 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(slot)
             hl.addWidget(btn)
         find_btn = self._icon_header_btn("edit-find", "Find  (Ctrl+F)")
-        find_btn.clicked.connect(self._output_find_bar.activate)
+        find_btn.clicked.connect(self._output_find_bar.toggle)
         hl.addWidget(find_btn)
 
         layout.addWidget(header)
@@ -1125,22 +1131,22 @@ class MainWindow(QMainWindow):
         bl.addWidget(self._mapping_table)
 
         self._mapping_find_bar.set_table(self._mapping_table)
-        find_btn.clicked.connect(self._mapping_find_bar.activate)
+        find_btn.clicked.connect(self._mapping_find_bar.toggle)
 
         return sec
 
     def _show_find(self) -> None:
         focused = QApplication.focusWidget()
         if focused is self._input_edit:
-            self._input_find_bar.activate()
+            self._input_find_bar.toggle()
         elif focused is self._output_edit:
-            self._output_find_bar.activate()
+            self._output_find_bar.toggle()
         elif focused is self._mapping_table:
-            self._mapping_find_bar.activate()
+            self._mapping_find_bar.toggle()
         else:
             for bar in (self._input_find_bar, self._output_find_bar, self._mapping_find_bar):
                 if bar.isVisible():
-                    bar.activate()
+                    bar.toggle()
                     return
             self._input_find_bar.activate()
 
