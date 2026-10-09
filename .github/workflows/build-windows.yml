@@ -39,7 +39,7 @@ jobs:
       - name: Install Python packages
         run: |
           python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet PyQt6 privatiser pyinstaller pillow
+          python -m pip install --quiet PyQt6 "privatiser>=0.6.0" pyinstaller pillow
 
       # ── Build ───────────────────────────────────────────────────────────────
       - name: Build EXE

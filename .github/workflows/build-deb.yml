@@ -68,7 +68,7 @@ jobs:
           python3 -m pip install --break-system-packages \
             --target vendor \
             --no-compile \
-            privatiser
+            "privatiser>=0.6.0"
           find vendor -name "*.pyc"         -delete
           find vendor -name "__pycache__"   -type d -exec rm -rf {} + 2>/dev/null || true
           find vendor -name "*.dist-info"   -type d -exec rm -rf {} + 2>/dev/null || true

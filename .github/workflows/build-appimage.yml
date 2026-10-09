@@ -48,7 +48,7 @@ jobs:
         run: |
           python3 -m venv /opt/build-venv
           /opt/build-venv/bin/pip install --quiet --upgrade pip
-          /opt/build-venv/bin/pip install --quiet PyQt6 privatiser pyinstaller
+          /opt/build-venv/bin/pip install --quiet PyQt6 "privatiser>=0.6.0" pyinstaller
 
       # ── Build ──────────────────────────────────────────────────────────────
       - name: Build AppImage

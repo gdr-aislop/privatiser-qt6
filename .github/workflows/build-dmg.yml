@@ -41,7 +41,7 @@ jobs:
           python3 --version
           python3 -m venv "$VENV"
           "$VENV/bin/pip" install --quiet --upgrade pip
-          "$VENV/bin/pip" install --quiet PyQt6 privatiser pyinstaller
+          "$VENV/bin/pip" install --quiet PyQt6 "privatiser>=0.6.0" pyinstaller
 
       # ── Build ───────────────────────────────────────────────────────────────
       - name: Build DMG

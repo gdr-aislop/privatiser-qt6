@@ -20,7 +20,7 @@ cd privatiser-qt6
 
 python3 -m venv .venv
 source .venv/bin/activate
-pip install PyQt6 privatiser
+pip install PyQt6 "privatiser>=0.6.0"
 
 python3 main.py
 ```
@@ -35,7 +35,7 @@ cd privatiser-qt6
 
 python3 -m venv .venv --system-site-packages
 source .venv/bin/activate
-pip install privatiser
+pip install "privatiser>=0.6.0"
 
 python3 main.py
 ```
@@ -52,7 +52,7 @@ cd privatiser-qt6
 
 python3 -m venv .venv --system-site-packages
 source .venv/bin/activate
-pip install privatiser
+pip install "privatiser>=0.6.0"
 
 python3 main.py
 ```
