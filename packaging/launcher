@@ -1,0 +1,4 @@
+#!/bin/sh
+PYTHONPATH=/usr/share/privatiser/vendor${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH
+exec python3 /usr/share/privatiser/main.py "$@"
