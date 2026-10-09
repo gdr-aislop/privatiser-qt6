@@ -59,11 +59,11 @@ python3 main.py
 
 ## Pre-built packages
 
-A `.deb` (Ubuntu 24.04), cross-distro AppImage, and macOS DMG are built automatically by CI.
+A `.deb` (Ubuntu 24.04 and 26.04), cross-distro AppImage, and macOS DMG are built automatically by CI.
 
 **Tagged releases** — [GitHub Releases](https://github.com/gdr-aislop/privatiser-qt6/releases) — pick the package for your platform from the release assets.
 
-**Every commit** — [GitHub Actions](https://github.com/gdr-aislop/privatiser-qt6/actions) → latest run → *privatiser-deb-ubuntu2404*, *privatiser-appimage*, *privatiser-dmg-macos*, or *privatiser-windows-exe* artifact (kept for 30 days).
+**Every commit** — [GitHub Actions](https://github.com/gdr-aislop/privatiser-qt6/actions) → latest run → *privatiser-deb-ubuntu2404*, *privatiser-deb-ubuntu2604*, *privatiser-appimage*, *privatiser-dmg-macos*, or *privatiser-windows-exe* artifact (kept for 30 days).
 
 ### Windows EXE
 
@@ -77,11 +77,11 @@ Download `Privatiser-*-macOS.dmg`, open it, and drag **Privatiser** to your Appl
 
 > **Note:** The app is not code-signed. On first launch, right-click the app and choose **Open** to bypass Gatekeeper, then confirm in the dialog.
 
-### .deb (Ubuntu 24.04)
+### .deb (Ubuntu 24.04 / 26.04)
 
 ```bash
 sudo apt install python3-pyqt6
-sudo dpkg -i privatiser_*_all.deb
+sudo dpkg -i privatiser_*_ubuntu$(lsb_release -rs)_all.deb
 ```
 
 ### AppImage (any Linux)

@@ -15,13 +15,30 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    name: build (ubuntu ${{ matrix.release }})
+    runs-on: ubuntu-latest
+    container: ubuntu:${{ matrix.release }}
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ["24.04", "26.04"]
     permissions:
       contents: write
 
     steps:
+      # Container images are minimal: git/certs needed before checkout
+      - name: Install bootstrap tools
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git ca-certificates
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       # ── Derive a sensible package version ─────────────────────────────────
       - name: Set version
@@ -37,8 +54,8 @@ jobs:
       # ── System build tools only — PyQt6 is a runtime dep, not needed here ─
       - name: Install system build dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
             python3-pip \
             python3-venv
 
@@ -48,7 +65,7 @@ jobs:
       # bundled inside the .deb.
       - name: Vendor privatiser into package tree
         run: |
-          pip install \
+          python3 -m pip install --break-system-packages \
             --target vendor \
             --no-compile \
             privatiser
@@ -62,7 +79,7 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          PKG="privatiser_${VERSION}_all"
+          PKG="privatiser_${VERSION}_ubuntu${{ matrix.release }}_all"
 
           install -d "${PKG}/DEBIAN"
           install -d "${PKG}/usr/share/privatiser/vendor"
@@ -122,8 +139,8 @@ jobs:
       # ── Smoke-test: install the .deb and exercise the library ──────────────
       - name: Install and smoke-test .deb
         run: |
-          sudo apt-get install -y python3-pyqt6
-          sudo dpkg -i "${{ steps.deb.outputs.deb }}"
+          apt-get install -y python3-pyqt6
+          dpkg -i "${{ steps.deb.outputs.deb }}"
           test -x /usr/bin/privatiser
           python3 -c "
           import sys
@@ -139,7 +156,7 @@ jobs:
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: privatiser-deb-ubuntu2404
+          name: privatiser-deb-ubuntu${{ matrix.release == '24.04' && '2404' || '2604' }}
           path: "*.deb"
           if-no-files-found: error
           retention-days: 30
